@@ -76,12 +76,10 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
   Serial.println(F("[ INFO ] ESP RFID v0.3alpha"));
-  pinMode(D2, OUTPUT);
-  digitalWrite(D2, 1);
   pinMode(D0, OUTPUT);
   pinMode(D1, INPUT);
   digitalWrite(D0, HIGH);
-
+  
   // Start SPIFFS filesystem
   SPIFFS.begin();
 
@@ -142,37 +140,35 @@ void setup() {
       }
     }
   });
-  
+
   // Start Web Server
   server.begin();
-
 /*----------------------------------------INIT MQTT--------------------------------------*/
   initMQTT();                                                                            //
-///////////////////////////////////////////////////////////////////////////////////////////  
+///////////////////////////////////////////////////////////////////////////////////////////
 }
-    
+
 // Main Loop
 void loop() {
-                                                  int leitura=LOW;
-/*------------------------------------------LOOP MQTT-------------------------------------*/
+  int leitura;
+  /*----------------------------------------LOOP MQTT-------------------------------------*/
   if(!MQTT.connected()){                                                                  //
       reconnectMQTT();                                                                    //
   }                                                                                       //
                                                                                           //
-  leitura = digitalRead(B_IN);                                                              //
+  leitura = digitalRead(B_IN);                                                            //
   recconectWiFi();                                                                        // 
-  if(leitura != ultimoestado){                                                                    //
-        ultimoestado = leitura;
-        if (leitura)
-        MQTT.publish("fechaduraSOHO/estado", "1");                                        //
-        else MQTT.publish("fechaduraSOHO/estado", "0");
-        Serial.print("ENVIADO");                                                   //
+  if(leitura != ultimoestado){                                                            //  Condicional para envio de informações (MQTT)
+        ultimoestado = leitura;                                                           //
+        if (leitura)                                                                      //
+        MQTT.publish("fechaduraSOHO/estado", "1");                                        //  Publica o pacote MQTT no Broker
+        else MQTT.publish("fechaduraSOHO/estado", "0");                                   //  Publica o pacote MQTT no Broker
+        Serial.printf("PACOTE MQTT ENVIADO : %d", leitura);                               //
         Serial.print("\n");                                                               //
-        Serial.print(leitura);                                                                    //
-      }                        
-      delay(500);//                                                                                   //                                                                            //
-      MQTT.loop();
-//  MQTT.disconnect();                                                                      //
+      }                                                                                   //        
+      delay(500);                                                                         //
+      MQTT.loop();                                                                        //
+                                                                                          //
 ////////////////////////////////////////////////////////////////////////////////////////////
   // check for a new update and restart
   if (shouldReboot) {
@@ -181,9 +177,13 @@ void loop() {
     ESP.restart();
   }
   unsigned long currentMillis = millis();
+  int i=0;
   if (currentMillis - previousMillis >= activateTime && activateRelay) {
     activateRelay = false;
+    digitalWrite(relayPin, !relayType);
+    delay(300);
     digitalWrite(relayPin, relayType);
+//    Serial.printf("Estado %c" ,relayType);
   }
   if (activateRelay) {
     digitalWrite(relayPin, !relayType);
@@ -192,7 +192,6 @@ void loop() {
   if (currentMillis >= cooldown) {
     rfidloop();
   }
-  
 }
 
 /* ------------------ RFID Functions ------------------- */
@@ -257,6 +256,7 @@ void rfidloop() {
         activateRelay = true;  // Give user Access to Door, Safe, Box whatever you like
         previousMillis = millis();
         Serial.println(" have access");
+        Serial.print(previousMillis);
       }
       else {
         Serial.println(" does not have access");
@@ -779,50 +779,51 @@ void ShowReaderDetails() {
     Serial.println(F("[ WARN ] Communication failure, check if MFRC522 properly connected"));
   }
 }
-/*------------------------------------PROTOTYPES MQTT-----------------------------------*/
-void initMQTT() {
-  MQTT.setServer(BROKER_MQTT, BROKER_PORT);
-  MQTT.setCallback(mqtt_callback);
-}
 
-//Função que recebe as mensagens publicadas
-void mqtt_callback(char* topic, byte* payload, unsigned int length) {
-
-  String message;
-  for (int i = 0; i < length; i++) {
-    char c = (char)payload[i];
-    message += c;
-  }
-  Serial.println("Tópico => " + String(topic) + " | Valor => " + String(message));
-  if (message == "ABRIR") {
-    digitalWrite(D2, 0);
-    delay(300);
-    digitalWrite(D2,1);
-  } else {
-    digitalWrite(D2, 0);
-  }
-  Serial.flush();
-}
-
-void reconnectMQTT() {
-  while (!MQTT.connected()) {
-    Serial.println("Tentando se conectar ao Broker MQTT: " + String(BROKER_MQTT));
-    if (MQTT.connect("ESP8266-ESP12-E","assistant","s0h0a551")) {
-      Serial.println("Conectado");
-      MQTT.subscribe("fechaduraSOHO/esp8266");
-
-    } else {
-      Serial.println("Falha ao Reconectar");
-      Serial.println("Tentando se reconectar em 2 segundos");
-      delay(2000);
-    }
-  }
-}
-
-void recconectWiFi() {
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
-    Serial.print(".");
-  }
-}
-
+/*------------------------------------PROTOTYPES MQTT---------------------------------*/
+void initMQTT() {                                                                     //
+  MQTT.setServer(BROKER_MQTT, BROKER_PORT);                                           //
+  MQTT.setCallback(mqtt_callback);                                                    //
+}                                                                                     //
+                                                                                      //
+//Função que recebe as mensagens publicadas                                           //
+void mqtt_callback(char* topic, byte* payload, unsigned int length) {                 //
+                                                                                      //
+  String message;                                                                     //
+  for (int i = 0; i < length; i++) {                                                  //
+    char c = (char)payload[i];                                                        //
+    message += c;                                                                     //
+  }                                                                                   //
+  Serial.println("Tópico => " + String(topic) + " | Valor => " + String(message));    //
+  if (message == "ABRIR") {                                                           //
+    digitalWrite(D2, 0);                                                              //
+    delay(300);                                                                       //
+    digitalWrite(D2,1);                                                               //
+  } else {                                                                            //
+    digitalWrite(D2, 0);                                                              //
+  }                                                                                   //
+  Serial.flush();                                                                     //
+}                                                                                     //
+                                                                                      //
+void reconnectMQTT() {                                                                //
+  while (!MQTT.connected()) {                                                         //
+    Serial.println("Tentando se conectar ao Broker MQTT: " + String(BROKER_MQTT));    //
+    if (MQTT.connect("ESP8266-ESP12-E","assistant","s0h0a551")) {                     //  Quando utilizar MQTT.connect(), lembrar de colocar username e password! Para mais informações, consulte a biblioteca PubSubClient!
+      Serial.println("Conectado");                                                    //
+      MQTT.subscribe("fechaduraSOHO/esp8266");                                        //  Faz com que o dispositivo se inscreva no tópico desejado.
+                                                                                      //
+    } else {                                                                          //
+      Serial.println("Falha ao Reconectar");                                          //
+      Serial.println("Tentando se reconectar em 2 segundos");                         //
+      delay(2000);                                                                    //
+    }                                                                                 //
+  }                                                                                   //
+}                                                                                     //
+                                                                                      //
+void recconectWiFi() {                                                                //
+  while (WiFi.status() != WL_CONNECTED) {                                             //
+    delay(100);                                                                       //
+    Serial.print(".");                                                                //
+  }                                                                                   //
+}                                                                                     //
+////////////////////////////////////////////////////////////////////////////////////////

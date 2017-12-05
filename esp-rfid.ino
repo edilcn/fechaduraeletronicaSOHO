@@ -26,7 +26,7 @@
   3. The SDA pin might be labeled SS on some/older MFRC522 boards.
 
 */
-
+#include <string.h>                   // Biblioteca necessária para utilizar a função strdup()
 #include <ESP8266WiFi.h>              // Whole thing is about using Wi-Fi networks
 #include <SPI.h>                      // RFID MFRC522 Module uses SPI protocol
 #include <ESP8266mDNS.h>              // Zero-config Library (Bonjour, Avahi) http://esp-rfid.local
@@ -40,10 +40,12 @@
 #include <TimeLib.h>                  // Library for converting epochtime to a date
 #include <WiFiUdp.h>                  // Library for manipulating UDP packets which is used by NTP Client to get Timestamps
 /*---------------------------------------Implementação------------------------------------------------*/
-#include <PubSubClient.h>                                                                             // 
+#include <PubSubClient.h>                                                                             //
 #define B_IN D1   //Define o pino D1 como B_IN                                                        //
-const char* BROKER_MQTT = "broker.mqttdashboard.com"; // ip/host do broker broker.mqttdashboard.com   //
-int BROKER_PORT = 1883; // porta do broker                                                            //
+char * BROKER_MQTT; // ip/host do broker broker.mqttdashboard.com                                     //
+int BROKER_PORT; // porta do broker                                                                   //
+char * usuario;                                                                                       //
+char * senha;                                                                                         //
 void initMQTT();                                                                                      //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,10 +78,9 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
   Serial.println(F("[ INFO ] ESP RFID v0.3alpha"));
-  pinMode(D0, OUTPUT);
   pinMode(D1, INPUT);
-  digitalWrite(D0, HIGH);
   
+
   // Start SPIFFS filesystem
   SPIFFS.begin();
 
@@ -157,7 +158,7 @@ void loop() {
   }                                                                                       //
                                                                                           //
   leitura = digitalRead(B_IN);                                                            //
-  recconectWiFi();                                                                        // 
+  recconectWiFi();                                                                        //
   if(leitura != ultimoestado){                                                            //  Condicional para envio de informações (MQTT)
         ultimoestado = leitura;                                                           //
         if (leitura)                                                                      //
@@ -165,7 +166,7 @@ void loop() {
         else MQTT.publish("fechaduraSOHO/estado", "0");                                   //  Publica o pacote MQTT no Broker
         Serial.printf("PACOTE MQTT ENVIADO : %d", leitura);                               //
         Serial.print("\n");                                                               //
-      }                                                                                   //        
+      }                                                                                   //
       delay(500);                                                                         //
       MQTT.loop();                                                                        //
                                                                                           //
@@ -183,7 +184,6 @@ void loop() {
     digitalWrite(relayPin, !relayType);
     delay(300);
     digitalWrite(relayPin, relayType);
-//    Serial.printf("Estado %c" ,relayType);
   }
   if (activateRelay) {
     digitalWrite(relayPin, !relayType);
@@ -256,7 +256,6 @@ void rfidloop() {
         activateRelay = true;  // Give user Access to Door, Safe, Box whatever you like
         previousMillis = millis();
         Serial.println(" have access");
-        Serial.print(previousMillis);
       }
       else {
         Serial.println(" does not have access");
@@ -685,6 +684,19 @@ bool loadConfiguration() {
   const char * password = json["pswd"];
   int wmode = json["wmode"];
 
+  // Armazena a informação proveniente do buffer (javascript)
+  const char * mqtt_broker = json["ipbroker"];
+  const int mqtt_port = json["portabroker"];
+  const char * usermqtt = json["usernamebroker"];
+  const char * pswdmqtt = json["passwordbroker"];
+
+  // Converte const char * para char * e salva nas variáveis.
+  BROKER_MQTT = strdup(mqtt_broker);
+  BROKER_PORT = mqtt_port;  // não precisa de conversão por ser um int.
+  usuario = strdup(usermqtt);
+  senha = strdup(pswdmqtt);
+
+
   const char * adminpass = json["adminpwd"];
 
   // Serve confidential files in /auth/ folder with a Basic HTTP authentication
@@ -782,8 +794,13 @@ void ShowReaderDetails() {
 
 /*------------------------------------PROTOTYPES MQTT---------------------------------*/
 void initMQTT() {                                                                     //
+  const char * MQTTIP = BROKER_MQTT;                                                  //
+  const char * usuarioMQTT = usuario;                                                 //
+  const char * senhaMQTT = senha;                                                     //
   MQTT.setServer(BROKER_MQTT, BROKER_PORT);                                           //
   MQTT.setCallback(mqtt_callback);                                                    //
+  MQTT.connect("ESP8266-ESP12-E", usuarioMQTT, senhaMQTT);                            //
+  MQTT.subscribe("fechaduraSOHO/esp8266");                                            //
 }                                                                                     //
                                                                                       //
 //Função que recebe as mensagens publicadas                                           //
@@ -806,6 +823,9 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {           
 }                                                                                     //
                                                                                       //
 void reconnectMQTT() {                                                                //
+                                                                                      // Atribui o valor do char usuario e senha -> const char *  : devido ao fato de MQTT.connect(const char *, const char *, const char *)
+  const char * usuarioMQTT = usuario;                                                 //
+  const char * senhaMQTT = senha;                                                     //
   while (!MQTT.connected()) {                                                         //
     Serial.println("Tentando se conectar ao Broker MQTT: " + String(BROKER_MQTT));    //
     if (MQTT.connect("ESP8266-ESP12-E","assistant","s0h0a551")) {                     //  Quando utilizar MQTT.connect(), lembrar de colocar username e password! Para mais informações, consulte a biblioteca PubSubClient!

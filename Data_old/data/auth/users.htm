@@ -7,7 +7,7 @@
       <meta name="description" content="">
       <meta name="author" content="">
       <link rel="icon" href="/favicon.ico">
-      <title>Controle de Acesso - SOHO</title>
+      <title>ESP RFID</title>
       <!-- Bootstrap core CSS -->
       <link href="/required.css" rel="stylesheet">
       <script src="/required.js" type="text/javascript"></script>
@@ -23,19 +23,19 @@
                   <li role="presentation"><a href="/auth/settings.htm">Settings</a> </li>
                </ul>
             </nav>
-            <h3 class="text-muted">Controle de Acesso - SOHO</h3>
+            <h3 class="text-muted">ESP RFID</h3>
          </div>
          <div class="jumbotron">
             <div class="overlay">
                <div id="loading-img" class="text-center">
                   <img src="/load.gif">
-                  <h5>Aguarde enquanto os dados são processados... <span id="loadpages"></span></h5>
+                  <h5>Please wait while fetching data... <span id="loadpages"></span></h5>
                </div>
                <br>
             </div>
             <div class="overlay">
                <div class="text-center">
-                  <h5>Cadastre novos usuários scaneando um tag RFID ou clicando em <i>Novo Usuário</i>.</h5>
+                  <h5>You can add new users by either scanning a RFID Tag or by clicking on "New User" button.</h5>
                </div>
                <br>
             </div>
@@ -54,12 +54,12 @@
                   <form class="modal-content form-horizontal" id="editor">
                      <div class="modal-header">
                         <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
-                        <h4 class="modal-title" id="editor-title">Novo Usuário</h4>
+                        <h4 class="modal-title" id="editor-title">Add User</h4>
                      </div>
                      <div class="modal-body">
                         <input type="number" id="id" name="id" class="hidden" />
                         <div class="form-group">
-                           <label for="picctype" class="col-sm-3 control-label">Tipo do PICC </label>
+                           <label for="picctype" class="col-sm-3 control-label">PICC Type</label>
                            <div class="col-sm-9">
                               <input type="text" class="form-control" id="picctype" name="picctype" placeholder="PICC Type" disabled>
                            </div>
@@ -71,30 +71,30 @@
                            </div>
                         </div>
                         <div class="form-group required">
-                           <label for="username" class="col-sm-3 control-label">Nome do usuário</label>
+                           <label for="username" class="col-sm-3 control-label">User Name or Label</label>
                            <div class="col-sm-9">
                               <input type="text" class="form-control" id="username" name="username" placeholder="User Name or Label" required>
                            </div>
                         </div>
                         <div class="form-group required">
-                           <label for="acctype" class="col-sm-3 control-label">Permitir acesso</label>
+                           <label for="acctype" class="col-sm-3 control-label">Access Type</label>
                            <div class="col-sm-9">
                               <select class="form-control" id="acctype" required>
-                                 <option selected="selected" value="1">Habilitado</option>
-                                 <option value="0">Desabilitado</option>
+                                 <option selected="selected" value="1">Active</option>
+                                 <option value="0">Disabled</option>
                               </select>
                            </div>
                         </div>
                         <div class="form-group required">
-                           <label for="validuntil" class="col-sm-3 control-label">Válido até</label>
+                           <label for="validuntil" class="col-sm-3 control-label">Valid Until</label>
                            <div class="col-sm-9">
                               <input type="date" class="form-control" id="validuntil" name="validuntil" value="2038-01-01" placeholder="Valid Until" required>
                            </div>
                         </div>
                      </div>
                      <div class="modal-footer">
-                        <button type="submit" class="btn btn-primary">Salvar mudanças</button>
-                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">Save changes</button>
+                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
                      </div>
                   </form>
                </div>
@@ -102,7 +102,7 @@
          </div>
          <hr>
          <footer class="footer">
-            <h6 class="text-muted">Controle de acesso inteligente do SOHO. Desenvolvido por Christian Ruppenthal e Edilberto Costa</h6>
+            <h6 class="text-muted">ESP RFID - This is a <a href="https://github.com/omersiar/esp-rfid/blob/master/LICENSE">free</a> software</h6>
          </footer>
       </div>
    </body>

@@ -12,6 +12,10 @@ var completed = false;
 function listCONF(obj) {
   document.getElementById("inputtohide").value = obj.ssid;
   document.getElementById("wifipass").value = obj.pswd;
+  document.getElementById("ipbroker").value = obj.ipbroker;
+  document.getElementById("portabroker").value = obj.portabroker;
+  document.getElementById("usernamebroker").value = obj.usernamebroker;
+  document.getElementById("passwordbroker").value = obj.passwordbroker;
   document.getElementById("gpioss").value = obj.sspin;
   document.getElementById("gain").value = obj.rfidgain;
   document.getElementById("gpiorly").value = obj.rpin;
@@ -122,6 +126,10 @@ function saveConf() {
   datatosend.ssid = ssid;
   datatosend.wmode = wmode;
   datatosend.pswd = document.getElementById("wifipass").value;
+  datatosend.ipbroker = document.getElementById("ipbroker").value;
+  datatosend.portabroker = document.getElementById("portabroker").value;
+  datatosend.usernamebroker = document.getElementById("usernamebroker").value;
+  datatosend.passwordbroker = document.getElementById("passwordbroker").value;
   datatosend.sspin = document.getElementById("gpioss").value;
   datatosend.rfidgain = document.getElementById("gain").value;
   datatosend.rtype = document.getElementById("typerly").value;
@@ -291,7 +299,7 @@ function builduserdata(obj) {
 }
 
 $(document).ready(function(){
-    $('[data-toggle="tooltip"]').tooltip();   
+    $('[data-toggle="tooltip"]').tooltip();
 });
 
 function start() {

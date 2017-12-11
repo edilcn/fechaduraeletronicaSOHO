@@ -39,6 +39,7 @@
 #include <NtpClientLib.h>             // To timestamp RFID scans we get Unix Time from NTP Server
 #include <TimeLib.h>                  // Library for converting epochtime to a date
 #include <WiFiUdp.h>                  // Library for manipulating UDP packets which is used by NTP Client to get Timestamps
+
 /*---------------------------------------Implementação------------------------------------------------*/
 #include <PubSubClient.h>                                                                             //
 #define B_IN D1   //Define o pino D1 como B_IN                                                        //
@@ -46,6 +47,7 @@ char * BROKER_MQTT; // ip/host do broker broker.mqttdashboard.com               
 int BROKER_PORT; // porta do broker                                                                   //
 char * usuario;                                                                                       //
 char * senha;                                                                                         //
+long lastReconnectAttempt = 0;
 void initMQTT();                                                                                      //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,6 +65,7 @@ int ultimoestado = -1;
 /*--------------------------------Inicializa a instância do MQTT-------------------------------------*/
 WiFiClient espClient;                                                                                //
 PubSubClient MQTT(espClient); // instancia o mqtt                                                    //
+String macToStr(const uint8_t* mac);                                                                 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -79,7 +82,8 @@ void setup() {
   Serial.println();
   Serial.println(F("[ INFO ] ESP RFID v0.3alpha"));
   pinMode(D1, INPUT);
-  
+  lastReconnectAttempt = 0;
+
 
   // Start SPIFFS filesystem
   SPIFFS.begin();
@@ -144,9 +148,9 @@ void setup() {
 
   // Start Web Server
   server.begin();
-/*----------------------------------------INIT MQTT--------------------------------------*/
-  initMQTT();                                                                            //
-///////////////////////////////////////////////////////////////////////////////////////////
+/*----------------------------------------INIT MQTT---------------------------------------*/
+  initMQTT();                                                                             //
+////////////////////////////////////////////////////////////////////////////////////////////
 }
 
 // Main Loop
@@ -154,16 +158,37 @@ void loop() {
   int leitura;
   /*----------------------------------------LOOP MQTT-------------------------------------*/
   if(!MQTT.connected()){                                                                  //
-      reconnectMQTT();                                                                    //
+    long now = millis();                                                                  //
+    if (now - lastReconnectAttempt > 5000) {                                              //
+    lastReconnectAttempt = now;                                                           //
+    if(reconnectMQTT()){                                                                  //
+      lastReconnectAttempt = 0;                                                           //
+      }                                                                                   //
+    }                                                                                     //
   }                                                                                       //
                                                                                           //
   leitura = digitalRead(B_IN);                                                            //
   recconectWiFi();                                                                        //
   if(leitura != ultimoestado){                                                            //  Condicional para envio de informações (MQTT)
         ultimoestado = leitura;                                                           //
+                                                                                          //
+        String clientName;                                                                //
+        clientName += "esp8266-";                                                         //
+        uint8_t mac[6];                                                                   //
+        WiFi.macAddress(mac);                                                             //
+        clientName += macToStr(mac);                                                      //
+                                                                                          //
+        String publ1sh;                                                                   //
+        publ1sh += "locks/";                                                              //
+        publ1sh += clientName;                                                            //
+        publ1sh += "/state/OPEN";                                                         //
+                                                                                          //
+        Serial.print("Tópico de publish: "); Serial.print(publ1sh);                       //
+        Serial.println();                                                                 //
+                                                                                          //
         if (leitura)                                                                      //
-        MQTT.publish("fechaduraSOHO/estado", "1");                                        //  Publica o pacote MQTT no Broker
-        else MQTT.publish("fechaduraSOHO/estado", "0");                                   //  Publica o pacote MQTT no Broker
+        MQTT.publish(publ1sh.c_str(), "1");                                               //  Publica o pacote MQTT no Broker
+        else MQTT.publish(publ1sh.c_str(), "0");                                          //  Publica o pacote MQTT no Broker
         Serial.printf("PACOTE MQTT ENVIADO : %d", leitura);                               //
         Serial.print("\n");                                                               //
       }                                                                                   //
@@ -797,10 +822,29 @@ void initMQTT() {                                                               
   const char * MQTTIP = BROKER_MQTT;                                                  //
   const char * usuarioMQTT = usuario;                                                 //
   const char * senhaMQTT = senha;                                                     //
+                                                                                      //
+  // Define o ID do dispositivo através do MAC Address + tempo(captura)               //
+  String clientName;                                                                  //
+  clientName += "esp8266-";                                                           //
+  uint8_t mac[6];                                                                     //
+  WiFi.macAddress(mac);                                                               //
+  clientName += macToStr(mac);                                                        //
+  // clientName += "-";                                                                  // Adiciona o tempo no ID do dispositivo
+  // clientName += String(micros() & 0xff, 16);                                          //
+  // Define tópico de inscrição para receber comandos (implementado com o ID)         //
+  String subscrib3;                                                                   //
+  subscrib3 += "locks/";                                                              //
+  subscrib3 += clientName;                                                            //
+  subscrib3 += "/cmnd/OPEN";                                                          //
+
+  Serial.print("Tópico de subscribe: "); Serial.print(subscrib3);
+  Serial.println();
+                                                                                      //
+  // Inicializa o serviço MQTT                                                        //                                                                                    //
   MQTT.setServer(BROKER_MQTT, BROKER_PORT);                                           //
   MQTT.setCallback(mqtt_callback);                                                    //
-  MQTT.connect("ESP8266-ESP12-E", usuarioMQTT, senhaMQTT);                            //
-  MQTT.subscribe("fechaduraSOHO/esp8266");                                            //
+  MQTT.connect((char*) clientName.c_str(), usuarioMQTT, senhaMQTT);                   //
+  MQTT.subscribe(subscrib3.c_str());                                               //
 }                                                                                     //
                                                                                       //
 //Função que recebe as mensagens publicadas                                           //
@@ -822,22 +866,37 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {           
   Serial.flush();                                                                     //
 }                                                                                     //
                                                                                       //
-void reconnectMQTT() {                                                                //
+bool reconnectMQTT() {                                                                //
                                                                                       // Atribui o valor do char usuario e senha -> const char *  : devido ao fato de MQTT.connect(const char *, const char *, const char *)
-  const char * usuarioMQTT = usuario;                                                 //
-  const char * senhaMQTT = senha;                                                     //
-  while (!MQTT.connected()) {                                                         //
-    Serial.println("Tentando se conectar ao Broker MQTT: " + String(BROKER_MQTT));    //
-    if (MQTT.connect("ESP8266-ESP12-E","assistant","s0h0a551")) {                     //  Quando utilizar MQTT.connect(), lembrar de colocar username e password! Para mais informações, consulte a biblioteca PubSubClient!
+    const char * MQTTIP = BROKER_MQTT;                                                //
+    const char * usuarioMQTT = usuario;                                               //
+    const char * senhaMQTT = senha;                                                   //
+                                                                                      //
+    // Define o ID do dispositivo através do MAC Address + tempo(captura)             //
+    String clientName;                                                                //
+    clientName += "esp8266-";                                                         //
+    uint8_t mac[6];                                                                   //
+    WiFi.macAddress(mac);                                                             //
+    clientName += macToStr(mac);                                                      //
+    // clientName += "-";                                                                // Adiciona o tempo no ID do dispositivo
+    // clientName += String(micros() & 0xff, 16);                                        //
+                                                                                      //
+    // Define tópico de inscrição para receber comandos (implementado com o ID)       //
+    String subscrib3;                                                                 //
+    subscrib3 += "locks/";                                                            //
+    subscrib3 += clientName;                                                          //
+    subscrib3 += "/cmnd/OPEN";                                                        //
+                                                                                      //
+    Serial.println("Tentando se conectar ao Broker MQTT: " + String(MQTTIP));         //
+    if (MQTT.connect((char*) clientName.c_str(),usuarioMQTT,senhaMQTT)) {              //  Quando utilizar MQTT.connect(), lembrar de colocar username e password! Para mais informações, consulte a biblioteca PubSubClient!
       Serial.println("Conectado");                                                    //
-      MQTT.subscribe("fechaduraSOHO/esp8266");                                        //  Faz com que o dispositivo se inscreva no tópico desejado.
+      Serial.printf("Tópico de subscribe: "); Serial.print(subscrib3);                //
+      Serial.println();                                                               //
+      MQTT.subscribe(subscrib3.c_str());                                              //  Faz com que o dispositivo seja inscrito no tópico desejado.
                                                                                       //
     } else {                                                                          //
       Serial.println("Falha ao Reconectar");                                          //
-      Serial.println("Tentando se reconectar em 2 segundos");                         //
-      delay(2000);                                                                    //
     }                                                                                 //
-  }                                                                                   //
 }                                                                                     //
                                                                                       //
 void recconectWiFi() {                                                                //
@@ -845,5 +904,16 @@ void recconectWiFi() {                                                          
     delay(100);                                                                       //
     Serial.print(".");                                                                //
   }                                                                                   //
+}                                                                                     //
+                                                                                      //
+String macToStr(const uint8_t* mac)                                                   //  Função de conversão do MAC address
+{                                                                                     //
+  String result;                                                                      //
+  for (int i = 0; i < 6; ++i) {                                                       //
+    result += String(mac[i], 16);                                                     //
+    if (i < 5)                                                                        //
+      result += ':';                                                                  //
+  }                                                                                   //
+  return result;                                                                      //
 }                                                                                     //
 ////////////////////////////////////////////////////////////////////////////////////////

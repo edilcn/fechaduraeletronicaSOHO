@@ -8,5 +8,5 @@
   - Algumas correções de bugs.
 
 # Contato
-  Christian Ruppenthal -> christian@soho.floripa.br
-  Edilberto Costa Neto -> edilcn@gmail.com
+  - Christian Ruppenthal -> christian@soho.floripa.br
+  - Edilberto Costa Neto -> edilcn@gmail.com

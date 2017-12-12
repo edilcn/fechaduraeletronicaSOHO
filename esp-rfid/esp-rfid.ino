@@ -181,7 +181,7 @@ void loop() {
         String publ1sh;                                                                   //
         publ1sh += "locks/";                                                              //
         publ1sh += clientName;                                                            //
-        publ1sh += "/state/OPEN";                                                         //
+        publ1sh += "/stat/OPEN";                                                         //
                                                                                           //
         Serial.print("Tópico de publish: "); Serial.print(publ1sh);                       //
         Serial.println();                                                                 //

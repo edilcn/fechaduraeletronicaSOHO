@@ -39,10 +39,6 @@
 #include <NtpClientLib.h>             // To timestamp RFID scans we get Unix Time from NTP Server
 #include <TimeLib.h>                  // Library for converting epochtime to a date
 #include <WiFiUdp.h>                  // Library for manipulating UDP packets which is used by NTP Client to get Timestamps
-#include <Adafruit_NeoPixel.h>
-#ifdef __AVR__
-  #include <avr/power.h>
-#endif
 
 /*---------------------------------------Implementação------------------------------------------------*/
 #include <PubSubClient.h>                                                                             //
@@ -66,21 +62,6 @@ int relayType;
 int activateTime;
 int timeZone;
 int ultimoestado = -1;
-
-// Which pin on the Arduino is connected to the NeoPixels?
-// On a Trinket or Gemma we suggest changing this to 1
-#define PIN            16
-
-// How many NeoPixels are attached to the Arduino?
-#define NUMPIXELS      157
-
-// When we setup the NeoPixel library, we tell it how many pixels, and which pin to use to send signals.
-// Note that for older NeoPixel strips you might need to change the third parameter--see the strandtest
-// example for more information on possible values.
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
-
-int delayval = 500; // delay for half a second
-
 /*--------------------------------Inicializa a instância do MQTT-------------------------------------*/
 WiFiClient espClient;                                                                                //
 PubSubClient MQTT(espClient); // instancia o mqtt                                                    //
@@ -170,7 +151,6 @@ void setup() {
 /*----------------------------------------INIT MQTT---------------------------------------*/
   initMQTT();                                                                             //
 ////////////////////////////////////////////////////////////////////////////////////////////
-pixels.begin(); // This initializes the NeoPixel library.
 }
 
 // Main Loop
@@ -216,21 +196,6 @@ void loop() {
       MQTT.loop();                                                                        //
                                                                                           //
 ////////////////////////////////////////////////////////////////////////////////////////////
-
-// For a set of NeoPixels the first NeoPixel is 0, second is 1, all the way up to the count of pixels minus one.
-
-for(int i=0;i<NUMPIXELS;i++){
-
-// pixels.Color takes RGB values, from 0,0,0 up to 255,255,255
-pixels.setPixelColor(i, pixels.Color(0,200,0)); // Moderately bright green color.
-
-pixels.show(); // This sends the updated pixel color to the hardware.
-
-delay(delayval); // Delay for a period of time (in milliseconds).
-
-}
-
-
   // check for a new update and restart
   if (shouldReboot) {
     Serial.println(F("[ UPDT ] Rebooting..."));
@@ -252,7 +217,6 @@ delay(delayval); // Delay for a period of time (in milliseconds).
   if (currentMillis >= cooldown) {
     rfidloop();
   }
-
 }
 
 /* ------------------ RFID Functions ------------------- */
@@ -892,10 +856,13 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {           
     message += c;                                                                     //
   }                                                                                   //
   Serial.println("Tópico => " + String(topic) + " | Valor => " + String(message));    //
-  if (message == "1") {                                                           //
-    activateRelay = true;  // Give user Access to Door, Safe, Box whatever you like
-    previousMillis = millis();                                                             //
-  }                                                                               //
+  if (message == "ABRIR") {                                                           //
+    digitalWrite(D2, 0);                                                              //
+    delay(300);                                                                       //
+    digitalWrite(D2,1);                                                               //
+  } else {                                                                            //
+    digitalWrite(D2, 0);                                                              //
+  }                                                                                   //
   Serial.flush();                                                                     //
 }                                                                                     //
                                                                                       //

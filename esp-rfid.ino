@@ -856,12 +856,9 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {           
     message += c;                                                                     //
   }                                                                                   //
   Serial.println("Tópico => " + String(topic) + " | Valor => " + String(message));    //
-  if (message == "ABRIR") {                                                           //
-    digitalWrite(D2, 0);                                                              //
-    delay(300);                                                                       //
-    digitalWrite(D2,1);                                                               //
-  } else {                                                                            //
-    digitalWrite(D2, 0);                                                              //
+  if (message == "1") {                                                               //
+    activateRelay = true;  // Give user Access to Door, Safe, Box whatever you like   //
+    previousMillis = millis();                                                        //
   }                                                                                   //
   Serial.flush();                                                                     //
 }                                                                                     //

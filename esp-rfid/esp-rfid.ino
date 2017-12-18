@@ -1,8 +1,6 @@
 /*
   Copyright (c) 2017 Omer Siar Baysal
-
   Released to Public Domain
-
   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -10,9 +8,7 @@
   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
   THE SOFTWARE.
-
   The following table shows the typical pin layout used:
-
   | Signal        | MFRC522       | WeMos D1 mini  | NodeMcu | Generic      |
   |---------------|:-------------:|:--------------:| :------:|:------------:|
   | RST/Reset     | RST           | NC             | NC      | NC           |
@@ -20,11 +16,9 @@
   | SPI MOSI      | MOSI          | D7             | D7      | GPIO-13      |
   | SPI MISO      | MISO          | D6             | D6      | GPIO-12      |
   | SPI SCK       | SCK           | D5             | D5      | GPIO-14      |
-
   NC. Not Connected
   2. Configurable via web page
   3. The SDA pin might be labeled SS on some/older MFRC522 boards.
-
 */
 #include <string.h>                   // Biblioteca necessária para utilizar a função strdup()
 #include <ESP8266WiFi.h>              // Whole thing is about using Wi-Fi networks
@@ -39,6 +33,7 @@
 #include <NtpClientLib.h>             // To timestamp RFID scans we get Unix Time from NTP Server
 #include <TimeLib.h>                  // Library for converting epochtime to a date
 #include <WiFiUdp.h>                  // Library for manipulating UDP packets which is used by NTP Client to get Timestamps
+#include <ArduinoOTA.h>               // Biblioteca para atualizações "Over-the-Air" 
 
 /*---------------------------------------Implementação------------------------------------------------*/
 #include <PubSubClient.h>                                                                             //
@@ -68,6 +63,10 @@ PubSubClient MQTT(espClient); // instancia o mqtt                               
 String macToStr(const uint8_t* mac);                                                                 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
+/*----------------------------------------------OTA--------------------------------------------------*/
+const char *OTAName = "assistant";                                                                   // Usuário e senha para o serviço OTA
+const char *OTAPassword = "s0h0a551";                                                                //
+///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Create MFRC522 RFID instance
 MFRC522 mfrc522 = MFRC522();
@@ -145,7 +144,7 @@ void setup() {
       }
     }
   });
-
+  startOTA();
   // Start Web Server
   server.begin();
 /*----------------------------------------INIT MQTT---------------------------------------*/

@@ -20,20 +20,21 @@
   2. Configurable via web page
   3. The SDA pin might be labeled SS on some/older MFRC522 boards.
 */
-#include <string.h>                   // Biblioteca necessária para utilizar a função strdup()
+#include <Arduino.h>
+#include "string.h"                   // Biblioteca necessária para utilizar a função strdup()
 #include <ESP8266WiFi.h>              // Whole thing is about using Wi-Fi networks
 #include <SPI.h>                      // RFID MFRC522 Module uses SPI protocol
 #include <ESP8266mDNS.h>              // Zero-config Library (Bonjour, Avahi) http://esp-rfid.local
 #include <MFRC522.h>                  // Library for Mifare RC522 Devices
 #include <ArduinoJson.h>              // JSON Library for Encoding and Parsing Json object to send browser. We do that because Javascript has built-in JSON parsing.
-#include <FS.h>                       // SPIFFS Library for storing web files to serve to web browsers
+#include "FS.h"                       // SPIFFS Library for storing web files to serve to web browsers
 #include <ESPAsyncTCP.h>              // Async TCP Library is mandatory for Async Web Server
 #include <ESPAsyncWebServer.h>        // Async Web Server with built-in WebSocket Plug-in
 #include <SPIFFSEditor.h>             // This creates a web page on server which can be used to edit text based files.
 #include <NtpClientLib.h>             // To timestamp RFID scans we get Unix Time from NTP Server
 #include <TimeLib.h>                  // Library for converting epochtime to a date
-#include <WiFiUdp.h>                  // Library for manipulating UDP packets which is used by NTP Client to get Timestamps
-#include <ArduinoOTA.h>               // Biblioteca para atualizações "Over-the-Air" 
+#include "WiFiUdp.h"                  // Library for manipulating UDP packets which is used by NTP Client to get Timestamps
+// #include <ArduinoOTA.h>               // Biblioteca para atualizações "Over-the-Air"
 
 /*---------------------------------------Implementação------------------------------------------------*/
 #include <PubSubClient.h>                                                                             //
@@ -62,10 +63,24 @@ WiFiClient espClient;                                                           
 PubSubClient MQTT(espClient); // instancia o mqtt                                                    //
 String macToStr(const uint8_t* mac);                                                                 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
-
+// Inicialização das funções
+void LogLatest(String uid, String username);
+String printIP(IPAddress adress);
+void rfidloop();
+void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len);
+void sendTime();
+void sendUserList(int page, AsyncWebSocketClient * client);
+void sendStatus();
+void printScanResult(int networksFound);
+void fallbacktoAPMode();
+void parseBytes(const char* str, char sep, byte* bytes, int maxBytes, int base);
+bool loadConfiguration();
+void setupRFID(int rfidss, int rfidgain);
+bool connectSTA(const char* ssid, const char* password, byte bssid[6]);
+void ShowReaderDetails();
 /*----------------------------------------------OTA--------------------------------------------------*/
-const char *OTAName = "assistant";                                                                   // Usuário e senha para o serviço OTA
-const char *OTAPassword = "s0h0a551";                                                                //
+// const char *OTAName = "assistant";                                                                   // Usuário e senha para o serviço OTA
+// const char *OTAPassword = "s0h0a551";                                                                //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Create MFRC522 RFID instance
@@ -75,147 +90,47 @@ AsyncWebServer server(80);
 // Create WebSocket instance on URL "/ws"
 AsyncWebSocket ws("/ws");
 
-// Set things up
-void setup() {
-  Serial.begin(115200);
-  Serial.println();
-  Serial.println(F("[ INFO ] ESP RFID v0.3alpha"));
-  pinMode(D1, INPUT);
-  lastReconnectAttempt = 0;
-
-
-  // Start SPIFFS filesystem
-  SPIFFS.begin();
-
-  /* Remove Users Helper
-    Dir dir = SPIFFS.openDir("/P/");
-    while (dir.next()){
-    SPIFFS.remove(dir.fileName());
-    }
-  */
-
-  // Try to load configuration file so we can connect to an Wi-Fi Access Point
-  // Do not worry if no config file is present, we fall back to Access Point mode and device can be easily configured
-  if (!loadConfiguration()) {
-    fallbacktoAPMode();
+void LogLatest(String uid, String username) {
+  File logFile = SPIFFS.open("/auth/latestlog.json", "r");
+  if (!logFile) {
+    // Can not open file create it.
+    File logFile = SPIFFS.open("/auth/latestlog.json", "w");
+    DynamicJsonBuffer jsonBuffer3;
+    JsonObject& root = jsonBuffer3.createObject();
+    root["type"] = "latestlog";
+    JsonArray& list = root.createNestedArray("list");
+    root.printTo(logFile);
+    logFile.close();
   }
-
-  // Start WebSocket Plug-in and handle incoming message on "onWsEvent" function
-  server.addHandler(&ws);
-  ws.onEvent(onWsEvent);
-
-  // Configure web server
-  // Add Text Editor (http://esp-rfid.local/edit) to Web Server. This feature likely will be dropped on final release.
-  server.addHandler(new SPIFFSEditor("admin", "admin"));
-
-  // Serve all files in root folder
-  server.serveStatic("/", SPIFFS, "/");
-  // Handle what happens when requested web file couldn't be found
-  server.onNotFound([](AsyncWebServerRequest * request) {
-    AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
-    response->addHeader("Location", "http://192.168.4.1");
-    request->send(response);
-  });
-
-  // Simple Firmware Update Handler
-  server.on("/auth/update", HTTP_POST, [](AsyncWebServerRequest * request) {
-    shouldReboot = !Update.hasError();
-    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldReboot ? "OK" : "FAIL");
-    response->addHeader("Connection", "close");
-    request->send(response);
-  }, [](AsyncWebServerRequest * request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-    if (!index) {
-      Serial.printf("[ UPDT ] Firmware update started: %s\n", filename.c_str());
-      Update.runAsync(true);
-      if (!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)) {
-        Update.printError(Serial);
+  else {
+    size_t size = logFile.size();
+    std::unique_ptr<char[]> buf (new char[size]);
+    logFile.readBytes(buf.get(), size);
+    DynamicJsonBuffer jsonBuffer4;
+    JsonObject& root = jsonBuffer4.parseObject(buf.get());
+    JsonArray& list = root["list"];
+    if (!root.success()) {
+      Serial.println("Impossible to read JSON file");
+    } else {
+      logFile.close();
+      if ( list.size() >= 15 ) {
+        list.remove(0);
       }
+      File logFile = SPIFFS.open("/auth/latestlog.json", "w");
+      DynamicJsonBuffer jsonBuffer5;
+      JsonObject& item = jsonBuffer5.createObject();
+      item["uid"] = uid;
+      item["username"] = username;
+      item["timestamp"] = now();
+      list.add(item);
+      root.printTo(logFile);
     }
-    if (!Update.hasError()) {
-      if (Update.write(data, len) != len) {
-        Update.printError(Serial);
-      }
-    }
-    if (final) {
-      if (Update.end(true)) {
-        Serial.printf("[ UPDT ] Firmware update finished: %uB\n", index + len);
-      } else {
-        Update.printError(Serial);
-      }
-    }
-  });
-  startOTA();
-  // Start Web Server
-  server.begin();
-/*----------------------------------------INIT MQTT---------------------------------------*/
-  initMQTT();                                                                             //
-////////////////////////////////////////////////////////////////////////////////////////////
+    logFile.close();
+  }
 }
 
-// Main Loop
-void loop() {
-  int leitura;
-  /*----------------------------------------LOOP MQTT-------------------------------------*/
-  if(!MQTT.connected()){                                                                  //
-    long now = millis();                                                                  //
-    if (now - lastReconnectAttempt > 5000) {                                              //
-    lastReconnectAttempt = now;                                                           //
-    if(reconnectMQTT()){                                                                  //
-      lastReconnectAttempt = 0;                                                           //
-      }                                                                                   //
-    }                                                                                     //
-  }                                                                                       //
-                                                                                          //
-  leitura = digitalRead(B_IN);                                                            //
-  recconectWiFi();                                                                        //
-  if(leitura != ultimoestado){                                                            //  Condicional para envio de informações (MQTT)
-        ultimoestado = leitura;                                                           //
-                                                                                          //
-        String clientName;                                                                //
-        clientName += "esp8266-";                                                         //
-        uint8_t mac[6];                                                                   //
-        WiFi.macAddress(mac);                                                             //
-        clientName += macToStr(mac);                                                      //
-                                                                                          //
-        String publ1sh;                                                                   //
-        publ1sh += "locks/";                                                              //
-        publ1sh += clientName;                                                            //
-        publ1sh += "/stat/OPEN";                                                         //
-                                                                                          //
-        Serial.print("Tópico de publish: "); Serial.print(publ1sh);                       //
-        Serial.println();                                                                 //
-                                                                                          //
-        if (leitura)                                                                      //
-        MQTT.publish(publ1sh.c_str(), "1");                                               //  Publica o pacote MQTT no Broker
-        else MQTT.publish(publ1sh.c_str(), "0");                                          //  Publica o pacote MQTT no Broker
-        Serial.printf("PACOTE MQTT ENVIADO : %d", leitura);                               //
-        Serial.print("\n");                                                               //
-      }                                                                                   //
-      delay(500);                                                                         //
-      MQTT.loop();                                                                        //
-                                                                                          //
-////////////////////////////////////////////////////////////////////////////////////////////
-  // check for a new update and restart
-  if (shouldReboot) {
-    Serial.println(F("[ UPDT ] Rebooting..."));
-    delay(100);
-    ESP.restart();
-  }
-  unsigned long currentMillis = millis();
-  int i=0;
-  if (currentMillis - previousMillis >= activateTime && activateRelay) {
-    activateRelay = false;
-    digitalWrite(relayPin, !relayType);
-    delay(300);
-    digitalWrite(relayPin, relayType);
-  }
-  if (activateRelay) {
-    digitalWrite(relayPin, !relayType);
-  }
-  // Another loop for RFID Events, since we are using polling method instead of Interrupt we need to check RFID hardware for events
-  if (currentMillis >= cooldown) {
-    rfidloop();
-  }
+String printIP(IPAddress adress) {
+  return (String)adress[0] + "." + (String)adress[1] + "." + (String)adress[2] + "." + (String)adress[3];
 }
 
 /* ------------------ RFID Functions ------------------- */
@@ -331,45 +246,6 @@ void rfidloop() {
     }
   }
   // So far got we got UID of Scanned RFID Tag, checked it if it's on the database and access status, informed Administrator Portal
-}
-
-void LogLatest(String uid, String username) {
-  File logFile = SPIFFS.open("/auth/latestlog.json", "r");
-  if (!logFile) {
-    // Can not open file create it.
-    File logFile = SPIFFS.open("/auth/latestlog.json", "w");
-    DynamicJsonBuffer jsonBuffer3;
-    JsonObject& root = jsonBuffer3.createObject();
-    root["type"] = "latestlog";
-    JsonArray& list = root.createNestedArray("list");
-    root.printTo(logFile);
-    logFile.close();
-  }
-  else {
-    size_t size = logFile.size();
-    std::unique_ptr<char[]> buf (new char[size]);
-    logFile.readBytes(buf.get(), size);
-    DynamicJsonBuffer jsonBuffer4;
-    JsonObject& root = jsonBuffer4.parseObject(buf.get());
-    JsonArray& list = root["list"];
-    if (!root.success()) {
-      Serial.println("Impossible to read JSON file");
-    } else {
-      logFile.close();
-      if ( list.size() >= 15 ) {
-        list.remove(0);
-      }
-      File logFile = SPIFFS.open("/auth/latestlog.json", "w");
-      DynamicJsonBuffer jsonBuffer5;
-      JsonObject& item = jsonBuffer5.createObject();
-      item["uid"] = uid;
-      item["username"] = username;
-      item["timestamp"] = now();
-      list.add(item);
-      root.printTo(logFile);
-    }
-    logFile.close();
-  }
 }
 
 // Handles WebSocket Events
@@ -599,10 +475,6 @@ void sendStatus() {
   }
 }
 
-String printIP(IPAddress adress) {
-  return (String)adress[0] + "." + (String)adress[1] + "." + (String)adress[2] + "." + (String)adress[3];
-}
-
 // Send Scanned SSIDs to websocket clients as JSON object
 void printScanResult(int networksFound) {
   DynamicJsonBuffer jsonBuffer;
@@ -772,7 +644,7 @@ bool connectSTA(const char* ssid, const char* password, byte bssid[6]) {
   Serial.print(ssid);
   // We try it for 20 seconds and give up on if we can't connect
   unsigned long now = millis();
-  uint8_t timeout = 20; // define when to time out in seconds
+  uint8_t timeout = 120; // define when to time out in seconds
   // Wait until we connect or 20 seconds pass
   do {
     if (WiFi.status() == WL_CONNECTED) {
@@ -817,6 +689,22 @@ void ShowReaderDetails() {
 }
 
 /*------------------------------------PROTOTYPES MQTT---------------------------------*/
+//Função que recebe as mensagens publicadas                                           //
+void mqtt_callback(char* topic, byte* payload, unsigned int length) {                 //
+                                                                                      //
+  String message;                                                                     //
+  for (int i = 0; i < length; i++) {                                                  //
+    char c = (char)payload[i];                                                        //
+    message += c;                                                                     //
+  }                                                                                   //
+  Serial.println("Tópico => " + String(topic) + " | Valor => " + String(message));    //
+  if (message == "1") {                                                               //
+    activateRelay = true;  // Give user Access to Door, Safe, Box whatever you like   //
+    previousMillis = millis();                                                        //
+  }                                                                                   //
+  Serial.flush();                                                                     //
+}                                                                                     //
+                                                                                      //
 void initMQTT() {                                                                     //
   const char * MQTTIP = BROKER_MQTT;                                                  //
   const char * usuarioMQTT = usuario;                                                 //
@@ -843,25 +731,8 @@ void initMQTT() {                                                               
   MQTT.setServer(BROKER_MQTT, BROKER_PORT);                                           //
   MQTT.setCallback(mqtt_callback);                                                    //
   MQTT.connect((char*) clientName.c_str(), usuarioMQTT, senhaMQTT);                   //
-  MQTT.subscribe(subscrib3.c_str());                                               //
-}                                                                                     //
-                                                                                      //
-//Função que recebe as mensagens publicadas                                           //
-void mqtt_callback(char* topic, byte* payload, unsigned int length) {                 //
-                                                                                      //
-  String message;                                                                     //
-  for (int i = 0; i < length; i++) {                                                  //
-    char c = (char)payload[i];                                                        //
-    message += c;                                                                     //
-  }                                                                                   //
-  Serial.println("Tópico => " + String(topic) + " | Valor => " + String(message));    //
-  if (message == "1") {                                                               //
-    activateRelay = true;  // Give user Access to Door, Safe, Box whatever you like   //
-    previousMillis = millis();                                                        //
-  }                                                                                   //
-  Serial.flush();                                                                     //
-}                                                                                     //
-                                                                                      //
+  MQTT.subscribe(subscrib3.c_str());                                                  //
+}                                                                                     //                                                                                       //
 bool reconnectMQTT() {                                                                //
                                                                                       // Atribui o valor do char usuario e senha -> const char *  : devido ao fato de MQTT.connect(const char *, const char *, const char *)
     const char * MQTTIP = BROKER_MQTT;                                                //
@@ -913,3 +784,146 @@ String macToStr(const uint8_t* mac)                                             
   return result;                                                                      //
 }                                                                                     //
 ////////////////////////////////////////////////////////////////////////////////////////
+
+// Set things up
+void setup() {
+  Serial.begin(115200);
+  Serial.println();
+  Serial.println(F("[ INFO ] ESP RFID v0.3alpha"));
+  pinMode(D1, INPUT);
+  lastReconnectAttempt = 0;
+
+
+  // Start SPIFFS filesystem
+  SPIFFS.begin();
+
+  /* Remove Users Helper
+    Dir dir = SPIFFS.openDir("/P/");
+    while (dir.next()){
+    SPIFFS.remove(dir.fileName());
+    }
+  */
+
+  // Try to load configuration file so we can connect to an Wi-Fi Access Point
+  // Do not worry if no config file is present, we fall back to Access Point mode and device can be easily configured
+  if (!loadConfiguration()) {
+    fallbacktoAPMode();
+  }
+
+  // Start WebSocket Plug-in and handle incoming message on "onWsEvent" function
+  server.addHandler(&ws);
+  ws.onEvent(onWsEvent);
+
+  // Configure web server
+  // Add Text Editor (http://esp-rfid.local/edit) to Web Server. This feature likely will be dropped on final release.
+  server.addHandler(new SPIFFSEditor("admin", "admin"));
+
+  // Serve all files in root folder
+  server.serveStatic("/", SPIFFS, "/");
+  // Handle what happens when requested web file couldn't be found
+  server.onNotFound([](AsyncWebServerRequest * request) {
+    AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
+    response->addHeader("Location", "http://192.168.4.1");
+    request->send(response);
+  });
+
+  // Simple Firmware Update Handler
+  server.on("/auth/update", HTTP_POST, [](AsyncWebServerRequest * request) {
+    shouldReboot = !Update.hasError();
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", shouldReboot ? "OK" : "FAIL");
+    response->addHeader("Connection", "close");
+    request->send(response);
+  }, [](AsyncWebServerRequest * request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+    if (!index) {
+      Serial.printf("[ UPDT ] Firmware update started: %s\n", filename.c_str());
+      Update.runAsync(true);
+      if (!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)) {
+        Update.printError(Serial);
+      }
+    }
+    if (!Update.hasError()) {
+      if (Update.write(data, len) != len) {
+        Update.printError(Serial);
+      }
+    }
+    if (final) {
+      if (Update.end(true)) {
+        Serial.printf("[ UPDT ] Firmware update finished: %uB\n", index + len);
+      } else {
+        Update.printError(Serial);
+      }
+    }
+  });
+  // startOTA();
+  // Start Web Server
+  server.begin();
+/*----------------------------------------INIT MQTT---------------------------------------*/
+  initMQTT();                                                                             //
+////////////////////////////////////////////////////////////////////////////////////////////
+}
+
+// Main Loop
+void loop() {
+  int leitura;
+  /*----------------------------------------LOOP MQTT-------------------------------------*/
+  if(!MQTT.connected()){                                                                  //
+    long now = millis();                                                                  //
+    if (now - lastReconnectAttempt > 5000) {                                              //
+    lastReconnectAttempt = now;                                                           //
+    if(reconnectMQTT()){                                                                  //
+      lastReconnectAttempt = 0;                                                           //
+      }                                                                                   //
+    }                                                                                     //
+  }                                                                                       //
+                                                                                          //
+  leitura = digitalRead(B_IN);                                                            //
+  recconectWiFi();                                                                        //
+  if(leitura != ultimoestado){                                                            //  Condicional para envio de informações (MQTT)
+        ultimoestado = leitura;                                                           //
+                                                                                          //
+        String clientName;                                                                //
+        clientName += "esp8266-";                                                         //
+        uint8_t mac[6];                                                                   //
+        WiFi.macAddress(mac);                                                             //
+        clientName += macToStr(mac);                                                      //
+                                                                                          //
+        String publ1sh;                                                                   //
+        publ1sh += "locks/";                                                              //
+        publ1sh += clientName;                                                            //
+        publ1sh += "/stat/OPEN";                                                         //
+                                                                                          //
+        Serial.print("Tópico de publish: "); Serial.print(publ1sh);                       //
+        Serial.println();                                                                 //
+                                                                                          //
+        if (leitura)                                                                      //
+        MQTT.publish(publ1sh.c_str(), "1");                                               //  Publica o pacote MQTT no Broker
+        else MQTT.publish(publ1sh.c_str(), "0");                                          //  Publica o pacote MQTT no Broker
+        Serial.printf("PACOTE MQTT ENVIADO : %d", leitura);                               //
+        Serial.print("\n");                                                               //
+      }                                                                                   //
+      delay(500);                                                                         //
+      MQTT.loop();                                                                        //
+                                                                                          //
+////////////////////////////////////////////////////////////////////////////////////////////
+  // check for a new update and restart
+  if (shouldReboot) {
+    Serial.println(F("[ UPDT ] Rebooting..."));
+    delay(100);
+    ESP.restart();
+  }
+  unsigned long currentMillis = millis();
+  int i=0;
+  if (currentMillis - previousMillis >= activateTime && activateRelay) {
+    activateRelay = false;
+    digitalWrite(relayPin, !relayType);
+    delay(300);
+    digitalWrite(relayPin, relayType);
+  }
+  if (activateRelay) {
+    digitalWrite(relayPin, !relayType);
+  }
+  // Another loop for RFID Events, since we are using polling method instead of Interrupt we need to check RFID hardware for events
+  if (currentMillis >= cooldown) {
+    rfidloop();
+  }
+}

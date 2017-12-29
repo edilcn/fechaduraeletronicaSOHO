@@ -34,7 +34,7 @@
 #include <NtpClientLib.h>             // To timestamp RFID scans we get Unix Time from NTP Server
 #include <TimeLib.h>                  // Library for converting epochtime to a date
 #include "WiFiUdp.h"                  // Library for manipulating UDP packets which is used by NTP Client to get Timestamps
-// #include <ArduinoOTA.h>               // Biblioteca para atualizações "Over-the-Air"
+#include <ArduinoOTA.h>               // Biblioteca para atualizações "Over-the-Air"
 
 /*---------------------------------------Implementação------------------------------------------------*/
 #include <PubSubClient.h>                                                                             //
@@ -89,6 +89,8 @@ MFRC522 mfrc522 = MFRC522();
 AsyncWebServer server(80);
 // Create WebSocket instance on URL "/ws"
 AsyncWebSocket ws("/ws");
+
+AsyncEventSource events("/events");
 
 void LogLatest(String uid, String username) {
   File logFile = SPIFFS.open("/auth/latestlog.json", "r");
@@ -810,6 +812,7 @@ void setup() {
     fallbacktoAPMode();
   }
 
+
   // Start WebSocket Plug-in and handle incoming message on "onWsEvent" function
   server.addHandler(&ws);
   ws.onEvent(onWsEvent);
@@ -826,6 +829,25 @@ void setup() {
     response->addHeader("Location", "http://192.168.4.1");
     request->send(response);
   });
+
+  // Configura as atualizações OTA e envia os eventos para o Browser
+  ArduinoOTA.onStart([]() { events.send("Update Start", "ota"); });
+  ArduinoOTA.onEnd([]() { events.send("Update End", "ota"); });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    char p[32];
+    sprintf(p, "Progress: %u%%\n", (progress/(total/100)));
+    events.send(p, "ota");
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    if(error == OTA_AUTH_ERROR) events.send("Auth Failed", "ota");
+    else if(error == OTA_BEGIN_ERROR) events.send("Begin Failed", "ota");
+    else if(error == OTA_CONNECT_ERROR) events.send("Connect Failed", "ota");
+    else if(error == OTA_RECEIVE_ERROR) events.send("Recieve Failed", "ota");
+    else if(error == OTA_END_ERROR) events.send("End Failed", "ota");
+  });
+
+  ArduinoOTA.setHostname("teste");
+  ArduinoOTA.begin();
 
   // Simple Firmware Update Handler
   server.on("/auth/update", HTTP_POST, [](AsyncWebServerRequest * request) {
@@ -911,6 +933,10 @@ void loop() {
     delay(100);
     ESP.restart();
   }
+
+  ArduinoOTA.handle();
+
+
   unsigned long currentMillis = millis();
   int i=0;
   if (currentMillis - previousMillis >= activateTime && activateRelay) {

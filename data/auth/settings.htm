@@ -16,13 +16,6 @@
   <body onload="start()">
     <div class="container">
       <div class="header clearfix">
-        <nav>
-          <ul class="nav nav-pills pull-right">
-            <li role="presentation"><a href="/auth/log.htm">Registros</a> </li>
-            <li role="presentation"><a href="/auth/users.htm">Usuários</a> </li>
-            <li role="presentation" class="active"><a href="/auth/settings.htm">Settings</a> </li>
-          </ul>
-        </nav>
         <h3 class="text-muted">Controle de Acesso - SOHO</h3>
       </div>
       <div class="jumbotron">
@@ -150,6 +143,10 @@
               <input id="wifipass" style="max-width:150px" class="form-control input-sm" type="text" name="ap_passwd">
               </span>
             </div>
+            <br>
+          </div>
+          <div class="col-sm-6">
+            <legend>Configurações do MQTT</legend>
             <div class="row form-group">
               <label data-toggle="tooltip" title="IP do Servidor Broker" class="col-xs-3">IP do Broker</label>
               <span class="col-xs-9">
@@ -182,49 +179,24 @@
               <label data-toggle="tooltip" title="Choose which ESP port is connected to RFID Hardware SDA pin" class="col-xs-3">SPI SS</label>
               <span class="col-xs-9">
                 <select class="form-control input-sm" style="max-width:185px" id="gpioss">
-                  <option value="0">GPIO-0</option>
-                  <option value="2">GPIO-2</option>
-                  <option value="4">GPIO-4</option>
-                  <option value="5">GPIO-5</option>
                   <option selected="selected" value="15">GPIO-15</option>
-                  <option value="16">GPIO-16</option>
                 </select>
               </span>
             </div>
             <div class="row form-group">
-              <label data-toggle="tooltip" title="Higher value means the longer RFID reader's reading distance" class="col-xs-3">Ganho da Antenna</label>
+              <label data-toggle="tooltip" title="Higher value means the longer RFID reader's reading distance" class="col-xs-3">Ganho da Antena</label>
               <span class="col-xs-9">
                 <select class="form-control input-sm" style="max-width:185px" id="gain">
-                  <option value="112">Max (48 db)</option>
-                  <option value="96">43 db</option>
-                  <option value="48">38 db</option>
-                  <option selected="selected" value="32">Avg (33 db)</option>
-                  <option value="16">23 db</option>
-                  <option value="0">Min (18 db)</option>
+                  <option selected="selected" value="112">Max (48 db)</option>
                 </select>
-
               </span>
             </div>
             <br>
             <div class="row form-group">
- 						<label data-toggle="tooltip" title="Depending on your electrical setup, you can choose the relay type" class="col-xs-3">Relay Type</label>
- 						<span class="col-xs-9">
- 						<select class="form-control input-sm" style="display:inline;max-width:185px" id="typerly">
- 							<option selected="selected" value="1">Active High</option>
- 							<option value="0">Active Low</option>
- 						</select>
- 						</span>
-				</div>
-            <div class="row form-group">
               <label data-toggle="tooltip" title="Choose which ESP port is connected to your relay" class="col-xs-3">Relay Pin</label>
               <span class="col-xs-9">
                 <select class="form-control input-sm" style="display:inline;max-width:150px" id="gpiorly">
-                  <option value="0">GPIO-0</option>
-                  <option value="2">GPIO-2</option>
                   <option selected="selected" value="4">GPIO-4</option>
-                  <option value="5">GPIO-5</option>
-                  <option value="15">GPIO-15</option>
-                  <option value="16">GPIO-16</option>
                 </select>
                 <button id="testb" type="button" class="btn btn-primary btn-xs" onclick="testRelay()">Test</button>
               </span>

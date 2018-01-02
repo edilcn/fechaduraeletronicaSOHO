@@ -35,15 +35,14 @@
 #include <TimeLib.h>                  // Library for converting epochtime to a date
 #include "WiFiUdp.h"                  // Library for manipulating UDP packets which is used by NTP Client to get Timestamps
 #include <ArduinoOTA.h>               // Biblioteca para atualizações "Over-the-Air"
-
-/*---------------------------------------Implementação------------------------------------------------*/
-#include <PubSubClient.h>                                                                             //
+#include <PubSubClient.h>             // Biblioteca MQTT
+/*---------------------------------------Implementação------------------------------------------------*/                                                                    //
 #define B_IN D1   //Define o pino D1 como B_IN                                                        //
 char * BROKER_MQTT; // ip/host do broker broker.mqttdashboard.com                                     //
 int BROKER_PORT; // porta do broker                                                                   //
 char * usuario;                                                                                       //
 char * senha;                                                                                         //
-long lastReconnectAttempt = 0;
+long lastReconnectAttempt = 0;                                                                        //
 void initMQTT();                                                                                      //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -78,10 +77,6 @@ bool loadConfiguration();
 void setupRFID(int rfidss, int rfidgain);
 bool connectSTA(const char* ssid, const char* password, byte bssid[6]);
 void ShowReaderDetails();
-/*----------------------------------------------OTA--------------------------------------------------*/
-// const char *OTAName = "assistant";                                                                   // Usuário e senha para o serviço OTA
-// const char *OTAPassword = "s0h0a551";                                                                //
-///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Create MFRC522 RFID instance
 MFRC522 mfrc522 = MFRC522();
@@ -830,7 +825,7 @@ void setup() {
     request->send(response);
   });
 
-  // Configura as atualizações OTA e envia os eventos para o Browser
+  // Configura as atualizações OTA
   ArduinoOTA.onStart([]() { events.send("Update Start", "ota"); });
   ArduinoOTA.onEnd([]() { events.send("Update End", "ota"); });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -846,7 +841,8 @@ void setup() {
     else if(error == OTA_END_ERROR) events.send("End Failed", "ota");
   });
 
-  ArduinoOTA.setHostname("teste");
+  ArduinoOTA.setHostname("lab-lock");
+  ArduinoOTA.setPassword("s0h0a551");
   ArduinoOTA.begin();
 
   // Simple Firmware Update Handler
@@ -887,6 +883,7 @@ void setup() {
 // Main Loop
 void loop() {
   int leitura;
+  Serial.print("OLAR");
   /*----------------------------------------LOOP MQTT-------------------------------------*/
   if(!MQTT.connected()){                                                                  //
     long now = millis();                                                                  //

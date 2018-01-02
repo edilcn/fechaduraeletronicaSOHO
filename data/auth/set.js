@@ -16,15 +16,7 @@ function listCONF(obj) {
   document.getElementById("portabroker").value = obj.portabroker;
   document.getElementById("usernamebroker").value = obj.usernamebroker;
   document.getElementById("passwordbroker").value = obj.passwordbroker;
-  document.getElementById("gpioss").value = obj.sspin;
-  document.getElementById("gain").value = obj.rfidgain;
-  document.getElementById("gpiorly").value = obj.rpin;
-  document.getElementById("delay").value = obj.rtime;
   document.getElementById("adminpwd").value = obj.adminpwd;
-  document.getElementById("typerly").value = obj.rtype;
-  document.getElementById("ntpserver").value = obj.ntpserver;
-  document.getElementById("intervals").value = obj.ntpinterval;
-  document.getElementById("DropDownTimezone").value = obj.timezone;
   document.getElementById("hostname").value = obj.hostnm;
   if (obj.wmode === "1") {
     document.getElementById("wmodeap").checked = true;

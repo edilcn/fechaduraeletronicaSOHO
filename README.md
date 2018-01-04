@@ -1,8 +1,8 @@
 # ESP RFID - Controle de Acesso - Fechadura SOHO
-  Sistema de controle de acesso conectado na internet e na nuvem. Desenvolvido no SOHO Centro de Inovação por Christian Ruppenthal e Edilberto Costa Neto.
+  Sistema de controle de acesso conectado na internet. Desenvolvido no SOHO Centro de Inovação por Christian Ruppenthal e Edilberto Costa Neto.
 
 # Versão
-  Atualizações no HTML, Javascript e código do esp8266.
+  Homie RFID
 
 # Contato
   - Christian Ruppenthal -> christian@soho.floripa.br

@@ -4,6 +4,7 @@
 #include <MFRC522.h>
 #include <WiFiUDP.h>
 #include <TimeLib.h>
+#include <FS.h>
 
 // Variáveis RFID
 const int rfidss = 15;
@@ -23,7 +24,36 @@ MFRC522 mfrc522 = MFRC522();
 
 // Funções RFID
 void setupRFID(int rfidss, int rfidgain);
+/*------------------------------Rotinas RFID----------------------------------*/
+bool regOnHandler(const HomieRange& range, const String& value){
+  if(value=="0") return false;
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(value);
+  char* UID = root["UID"];
+  char* start_dateTime = root["start"]["dateTime"]; // "2015-09-15T06:00:00+02:00"
+  char* start_timeZone = root["start"]["timeZone"]; // "Europe/Zurich"
+  char* end_dateTime = root["end"]["dateTime"]; // "2015-09-15T07:00:00+02:00"
+  char* end_timeZone = root["end"]["timeZone"]; // "Europe/Zurich"
+  char* recurrence0 = root["recurrence"][0]; // "RRULE:FREQ=WEEKLY;COUNT=5;BYDAY=TU,FR"
+  char* userID = UID;
+  String path_userID = "/U/";
+  path_userID += userID;
+  path_userID += ".json";
 
+  DynamicJsonBuffer jsonBuffer1;
+  JsonObject& user = jsonBuffer1.createObject();
+  user["UID"] = UID;
+  user["StartdateTime"] = start_dateTime;
+  user["timeZone"] = start_timeZone;
+  user["EnddateTime"] = end_dateTime;
+  user["timeZone"] = end_timeZone;
+  JsonArray& recurrence = user.createNestedArray("recurrence");
+  recurrence.add(recurrence0);
+  File f = SPIFFS.open(path_userID.c_str(), "w");
+  root.prettyPrintTo(f);
+  f.close();
+  return true;
+}
 void ShowReaderDetails() {
   // Get the MFRC522 software version
   byte v = mfrc522.PCD_ReadRegister(mfrc522.VersionReg);
@@ -55,8 +85,9 @@ void setupRFID(int rfidss, int rfidgain) {
 }
 
 /*--------------------Funções e declarações para o HOMIE----------------------*/
-HomieNode rfidNode("reader", "Rfid");
-HomieNode lockNode("lock", "Relay");
+HomieNode rfidNode("leitura", "Rfid");
+HomieNode lockNode("fechadura", "Relay");
+HomieNode regNode("cadastro", "File");
 
 bool lockOnHandler(const HomieRange& range, const String& value) {
   if (value != "true" && value != "false") return false;
@@ -70,7 +101,7 @@ bool lockOnHandler(const HomieRange& range, const String& value) {
 }
 
 void setupHandler() {
-  rfidNode.setProperty("read").send("c");
+  rfidNode.setProperty("leitura").send("c");
 }
 
 void loopHandler() {
@@ -107,7 +138,7 @@ void loopHandler() {
   char JSONmessageBuffer[300];
   JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
   Homie.getLogger() << "Leitura da TAG: " << JSONmessageBuffer << endl;
-  rfidNode.setProperty("read").send(JSONmessageBuffer); // Define o tópico soho/deviceID/lockreader/read como publish
+  rfidNode.setProperty("leitura").send(JSONmessageBuffer); // Define o tópico soho/deviceID/lockreader/read como publish
 }
 ////////////////////////////////////////////////////////////////////////////////
 //1533133620        1533130020
@@ -115,6 +146,7 @@ void loopHandler() {
 void setup() {
     Serial.begin(115200);
     Serial << endl << endl;
+    SPIFFS.begin();
     pinMode(PIN_RELAY, OUTPUT);
     digitalWrite(PIN_RELAY, HIGH);
     Homie_setFirmware("RFID Reader", "0.0.1");
@@ -122,8 +154,9 @@ void setup() {
     NTP.begin(ntpserver, timeZone);
     NTP.setInterval(ntpinter * 60);
     Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
+    regNode.advertise("novo").settable(regOnHandler);
     lockNode.advertise("open").settable(lockOnHandler);
-    rfidNode.advertise("read");
+    rfidNode.advertise("leitura");
     Homie.setup();
 }
 

@@ -27,31 +27,45 @@ void setupRFID(int rfidss, int rfidgain);
 /*------------------------------Rotinas RFID----------------------------------*/
 bool regOnHandler(const HomieRange& range, const String& value){
   if(value=="0") return false;
+  Serial.print("Cadastro: "); Serial.print(value); Serial.println();
+  // Parseia JSON de cadastro vindo do Servidor
   DynamicJsonBuffer jsonBuffer;
   JsonObject& root = jsonBuffer.parseObject(value);
-  char* UID = root["UID"];
-  char* start_dateTime = root["start"]["dateTime"]; // "2015-09-15T06:00:00+02:00"
-  char* start_timeZone = root["start"]["timeZone"]; // "Europe/Zurich"
-  char* end_dateTime = root["end"]["dateTime"]; // "2015-09-15T07:00:00+02:00"
-  char* end_timeZone = root["end"]["timeZone"]; // "Europe/Zurich"
-  char* recurrence0 = root["recurrence"][0]; // "RRULE:FREQ=WEEKLY;COUNT=5;BYDAY=TU,FR"
-  char* userID = UID;
-  String path_userID = "/U/";
-  path_userID += userID;
-  path_userID += ".json";
+  String UID = root["uid"];                                                      // Tag do usuário
+  Serial.print("UID recebido: "); Serial.print(UID); Serial.println();
+  String start = root["start"];                                                  // Horário inicial
+  Serial.print("Start recebido: "); Serial.print(start); Serial.println();
+  String stop = root["stop"];                                                    // Horário final
+  Serial.print("Stop recebido: "); Serial.print(stop); Serial.println();
+  String days = root["days"];                                                    // Dias de recorrência do evento
+  Serial.print("Days recebido: "); Serial.print(days); Serial.println();
+  String revoke = root["revoke"];                                                // Data e hora de expiração de acesso.
+  Serial.print("Revoke recebido: "); Serial.print(revoke); Serial.println();
 
+  // Monta o caminho e o arquivo a ser criado
+  String path_userID = "/U/";
+  path_userID += UID;
+  path_userID += ".json";
+  Serial.print("Path: ");Serial.print(path_userID);
+
+  // Aloca os valores parseados num buffer para ser serializado dentro do arquivo UID.json
   DynamicJsonBuffer jsonBuffer1;
   JsonObject& user = jsonBuffer1.createObject();
-  user["UID"] = UID;
-  user["StartdateTime"] = start_dateTime;
-  user["timeZone"] = start_timeZone;
-  user["EnddateTime"] = end_dateTime;
-  user["timeZone"] = end_timeZone;
-  JsonArray& recurrence = user.createNestedArray("recurrence");
-  recurrence.add(recurrence0);
-  File f = SPIFFS.open(path_userID.c_str(), "w");
-  root.prettyPrintTo(f);
+  user["uid"] = UID;
+  Serial.print("UID: ");Serial.print(UID);Serial.println();
+  user["start"] = start;
+  Serial.print("start: ");Serial.print(start);Serial.println();
+  user["stop"] = stop;
+  Serial.print("stop: ");Serial.print(stop);Serial.println();
+  user["days"] = days;
+  Serial.print("days: ");Serial.print(days);Serial.println();
+  user["revoke"] = revoke;
+  Serial.print("revoke: ");Serial.print(revoke);Serial.println();
+  File f = SPIFFS.open(path_userID, "w");
+  user.prettyPrintTo(f);
+  Serial.print("Arquivo: "); Serial.print(f);Serial.println();
   f.close();
+
   return true;
 }
 void ShowReaderDetails() {
@@ -131,7 +145,7 @@ void loopHandler() {
   String type = mfrc522.PICC_GetTypeName(piccType);
 
   // Prepara o envio do JSON para o Servidor
-  StaticJsonBuffer<300> JSONbuffer;
+  DynamicJsonBuffer JSONbuffer;;
   JsonObject& JSONencoder = JSONbuffer.createObject();
   JSONencoder["tag"] = uid;
   JSONencoder["time"] = NTP.getTime();
@@ -144,6 +158,7 @@ void loopHandler() {
 //1533133620        1533130020
 
 void setup() {
+    pinMode(D1, INPUT);
     Serial.begin(115200);
     Serial << endl << endl;
     SPIFFS.begin();
@@ -162,4 +177,29 @@ void setup() {
 
 void loop() {
     Homie.loop();
+    if (digitalRead(D1) == HIGH){
+// Rotina para printar os tamanhos dos arquivos salvos na memória do ESP
+      Dir dir = SPIFFS.openDir("/U");
+      while (dir.next()) {
+          Serial.print(dir.fileName());
+          File f = dir.openFile("r");
+          Serial.print(" Tamanho do arquivo: "); Serial.print(f.size());Serial.println();
+      }
+      File f = SPIFFS.open("/U/98b98827.json", "r");
+  // Check if we could find it above function returns true if the file is exist
+      if (f) {
+    // Now we need to read contents of the file to parse JSON object contains Username and Access Status
+          size_t size = f.size();
+    // Allocate a buffer to store contents of the file.
+          std::unique_ptr<char[]> buf(new char[size]);
+    // We don't use String here because ArduinoJson library requires the input
+    // buffer to be mutable. If you don't use ArduinoJson, you may as well
+    // use configFile.readString instead.
+          f.readBytes(buf.get(), size);
+          DynamicJsonBuffer jsonBuffer0;
+          JsonObject& json = jsonBuffer0.parseObject(buf.get());
+          String demo = json["uid"];
+          Serial.print(demo);
+    }
+}
 }

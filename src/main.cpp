@@ -58,7 +58,8 @@ HomieNode lockNode("fechadura", "Relay");
 HomieNode regNode("cadastro", "File");
 ////////////////////////////////////////////////////////////////////////////////
 
-/*------------------------HOMIE Handlers--------------------------------------*/
+
+/*----------------------------HOMIE Handlers----------------------------------*/
 bool regOnHandler(const HomieRange& range, const String& value){
   if(value=="0") return false;
   // Parseia JSON de cadastro vindo do Servidor
@@ -87,7 +88,7 @@ bool regOnHandler(const HomieRange& range, const String& value){
   JsonObject& user = jsonBuffer1.createObject();
   user["uid"] = UID;
   user["start"] = start;
-  user["stop"] = stop  user["revoke"] = revoke;
+  user["stop"] = stop;
   user["days"] = days;
   user["revoke"] = revoke;
         /*-----Debug----*/
@@ -156,10 +157,84 @@ void loopHandler() {
   char JSONmessageBuffer[300];
   JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
   Homie.getLogger() << "Leitura da TAG: " << JSONmessageBuffer << endl;
-  rfidNode.setProperty("leitura").send(JSONmessageBuffer);                      // Define o tópico soho/deviceID/lockreader/read como publish
+  rfidNode.setProperty("read").send(JSONmessageBuffer);                         // Define o tópico soho/deviceID/lockreader/read como publish
 }
 ////////////////////////////////////////////////////////////////////////////////
 
+/*-----------------------------Modo Offline-----------------------------------*/
+void MQTToffline_mode(){
+  time_t timestamp = NTP.getTime();
+  //If a new PICC placed to RFID reader continue
+  if ( ! mfrc522.PICC_IsNewCardPresent()) {
+    delay(50);
+    return;
+  }
+  //Since a PICC placed get Serial (UID) and continue
+  if ( ! mfrc522.PICC_ReadCardSerial()) {
+    delay(50);
+    return;
+  }
+  // We got UID tell PICC to stop responding
+  mfrc522.PICC_HaltA();
+  cooldown = millis() + 2000;
+
+  // There are Mifare PICCs which have 4 byte or 7 byte UID
+  // Get PICC's UID and store on a variable
+  Serial.print(F("[ MQTT_DISCONNECTED ] PICC's UID: "));
+  String uid = "";
+  for (int i = 0; i < mfrc522.uid.size; ++i) {
+    uid += String(mfrc522.uid.uidByte[i], HEX);
+  }
+
+  String off_uid = "/U/";
+  off_uid += uid;
+  off_uid += ".json";
+
+  if (SPIFFS.exists(off_uid)) {
+    File off = SPIFFS.open(off_uid, "r");
+    size_t size = off.size();
+    // Aloca o buffer para determinar o tamanho do arquivo.
+    std::unique_ptr<char[]> buf(new char[size]);
+    off.readBytes(buf.get(), size);
+    DynamicJsonBuffer jsonBuffer0;
+    JsonObject& json = jsonBuffer0.parseObject(buf.get());
+    String demo = json["uid"];
+    Serial.print(demo);Serial.println();
+    if(demo == uid){
+      DynamicJsonBuffer jsonBuffer1;
+      JsonObject& mqttlog = jsonBuffer1.createObject();
+      time_t timestamp = NTP.getTime();
+      mqttlog["uid"] = uid;
+      mqttlog["time"] = NTP.getTimeStr();
+      File log = SPIFFS.open("/log/Mqtt_Disconnected.json", "a");
+      mqttlog.prettyPrintTo(log);
+      log.close();
+      digitalWrite(D2, LOW);
+      delay(300);
+      digitalWrite(D2, HIGH);
+    }
+  }
+
+}
+////////////////////////////////////////////////////////////////////////////////
+/*-----------------------------Homie events-----------------------------------*/
+void onHomieEvent(const HomieEvent& event) {
+  switch(event.type) {
+    // case HomieEventType::WIFI_DISCONNECTED:
+    //   // Inicia o modo Offline
+    //
+    //   break;
+    // case HomieEventType::MQTT_READY:
+    //   // Envia o log de acesso do período Offline
+    //
+    //   // Apaga o log de acesso do período Offline
+    //
+    //   break;
+    case HomieEventType::MQTT_DISCONNECTED:
+      void MQTToffline_mode();
+      break;
+  }
+}
 void setup() {
     pinMode(D1, INPUT);
     Serial.begin(115200);
@@ -187,20 +262,6 @@ void loop() {
           Serial.print(dir.fileName());
           File f = dir.openFile("r");
           Serial.print(" Tamanho do arquivo: "); Serial.print(f.size());Serial.println();
-      }
-      File f = SPIFFS.open("/U/98b98827.json", "r");
-      // Verifica a existência do arquivo
-      if (f) {
-        size_t size = f.size();
-        // Aloca o buffer para determinar o tamanho do arquivo.
-        std::unique_ptr<char[]> buf(new char[size]);
-        f.readBytes(buf.get(), size);
-        DynamicJsonBuffer jsonBuffer0;
-        JsonObject& json = jsonBuffer0.parseObject(buf.get());
-        String demo = json["uid"];
-        String teste = json["start"];
-        Serial.print(demo);Serial.println();
-        Serial.print(teste);Serial.println();
       }
     }
 }

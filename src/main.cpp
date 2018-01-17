@@ -22,52 +22,8 @@ uint32_t previousMillis = 0;
 // Create MFRC522 RFID instance
 MFRC522 mfrc522 = MFRC522();
 
-// Funções RFID
-void setupRFID(int rfidss, int rfidgain);
 /*------------------------------Rotinas RFID----------------------------------*/
-bool regOnHandler(const HomieRange& range, const String& value){
-  if(value=="0") return false;
-  Serial.print("Cadastro: "); Serial.print(value); Serial.println();
-  // Parseia JSON de cadastro vindo do Servidor
-  DynamicJsonBuffer jsonBuffer;
-  JsonObject& root = jsonBuffer.parseObject(value);
-  String UID = root["uid"];                                                      // Tag do usuário
-  Serial.print("UID recebido: "); Serial.print(UID); Serial.println();
-  String start = root["start"];                                                  // Horário inicial
-  Serial.print("Start recebido: "); Serial.print(start); Serial.println();
-  String stop = root["stop"];                                                    // Horário final
-  Serial.print("Stop recebido: "); Serial.print(stop); Serial.println();
-  String days = root["days"];                                                    // Dias de recorrência do evento
-  Serial.print("Days recebido: "); Serial.print(days); Serial.println();
-  String revoke = root["revoke"];                                                // Data e hora de expiração de acesso.
-  Serial.print("Revoke recebido: "); Serial.print(revoke); Serial.println();
-
-  // Monta o caminho e o arquivo a ser criado
-  String path_userID = "/U/";
-  path_userID += UID;
-  path_userID += ".json";
-  Serial.print("Path: ");Serial.print(path_userID);
-
-  // Aloca os valores parseados num buffer para ser serializado dentro do arquivo UID.json
-  DynamicJsonBuffer jsonBuffer1;
-  JsonObject& user = jsonBuffer1.createObject();
-  user["uid"] = UID;
-  Serial.print("UID: ");Serial.print(UID);Serial.println();
-  user["start"] = start;
-  Serial.print("start: ");Serial.print(start);Serial.println();
-  user["stop"] = stop;
-  Serial.print("stop: ");Serial.print(stop);Serial.println();
-  user["days"] = days;
-  Serial.print("days: ");Serial.print(days);Serial.println();
-  user["revoke"] = revoke;
-  Serial.print("revoke: ");Serial.print(revoke);Serial.println();
-  File f = SPIFFS.open(path_userID, "w");
-  user.prettyPrintTo(f);
-  Serial.print("Arquivo: "); Serial.print(f);Serial.println();
-  f.close();
-
-  return true;
-}
+void setupRFID(int rfidss, int rfidgain);
 void ShowReaderDetails() {
   // Get the MFRC522 software version
   byte v = mfrc522.PCD_ReadRegister(mfrc522.VersionReg);
@@ -81,27 +37,75 @@ void ShowReaderDetails() {
     Serial.print(F(" = clone"));
   else
     Serial.print(F(" (unknown)"));
-  Serial.println("");
-  // When 0x00 or 0xFF is returned, communication probably failed
+  Serial.println("");                                                           // When 0x00 or 0xFF is returned, communication probably failed
   if ((v == 0x00) || (v == 0xFF)) {
     Serial.println(F("[ WARN ] Communication failure, check if MFRC522 properly connected"));
   }
 }
 void setupRFID(int rfidss, int rfidgain) {
-  SPI.begin();           // MFRC522 Hardware uses SPI protocol
-  mfrc522.PCD_Init(rfidss, UINT8_MAX);    // Initialize MFRC522 Hardware
-  // Set RFID Hardware Antenna Gain
-  // This may not work with some boards
-  mfrc522.PCD_SetAntennaGain(rfidgain);
+  SPI.begin();                                                                  // Inicializa o protocolo SPI para o MFRC522
+  mfrc522.PCD_Init(rfidss, UINT8_MAX);                                          // Inicializa MFRC522 Hardware
+  mfrc522.PCD_SetAntennaGain(rfidgain);                                         // Seta o ganho da antena
   Serial.printf("[ INFO ] RFID SS_PIN: %u and Gain Factor: %u", rfidss, rfidgain);
   Serial.println("");
-  ShowReaderDetails(); // Show details of PCD - MFRC522 Card Reader details
+  ShowReaderDetails();                                                          // Show details of PCD - MFRC522 Card Reader details
 }
+////////////////////////////////////////////////////////////////////////////////
 
 /*--------------------Funções e declarações para o HOMIE----------------------*/
-HomieNode rfidNode("auth", "Rfid");
+HomieNode rfidNode("leitura", "Rfid");
 HomieNode lockNode("fechadura", "Relay");
 HomieNode regNode("cadastro", "File");
+////////////////////////////////////////////////////////////////////////////////
+
+/*------------------------HOMIE Handlers--------------------------------------*/
+bool regOnHandler(const HomieRange& range, const String& value){
+  if(value=="0") return false;
+  // Parseia JSON de cadastro vindo do Servidor
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& root = jsonBuffer.parseObject(value);
+  String UID = root["uid"];                                                     // Tag do usuário
+  String start = root["start"];                                                 // Horário inicial
+  String stop = root["stop"];                                                   // Horário final
+  String days = root["days"];                                                   // Dias de recorrência do evento
+  String revoke = root["revoke"];                                               // Data e hora de expiração de acesso.
+        /*-----Debug----*/
+        // Serial.print("Cadastro: "); Serial.print(value); Serial.println();
+        // Serial.print("UID recebido: "); Serial.print(UID); Serial.println();
+        // Serial.print("Start recebido: "); Serial.print(start); Serial.println();
+        // Serial.print("Stop recebido: "); Serial.print(stop); Serial.println();
+        // Serial.print("Days recebido: "); Serial.print(days); Serial.println();
+        // Serial.print("Revoke recebido: "); Serial.print(revoke); Serial.println();
+
+  // Monta o caminho e o arquivo a ser criado
+  String path_userID = "/U/";
+  path_userID += UID;
+  path_userID += ".json";
+
+  // Aloca os valores parseados num buffer para ser serializado dentro do arquivo UID.json
+  DynamicJsonBuffer jsonBuffer1;
+  JsonObject& user = jsonBuffer1.createObject();
+  user["uid"] = UID;
+  user["start"] = start;
+  user["stop"] = stop  user["revoke"] = revoke;
+  user["days"] = days;
+  user["revoke"] = revoke;
+        /*-----Debug----*/
+        // Serial.print("UID: ");Serial.print(UID);Serial.println();
+        // Serial.print("start: ");Serial.print(start);Serial.println();
+        // Serial.print("stop: ");Serial.print(stop);Serial.println();
+        // Serial.print("days: ");Serial.print(days);Serial.println();
+        // Serial.print("revoke: ");Serial.print(revoke);Serial.println();
+        // Serial.print("Arquivo: "); Serial.print(f);Serial.println();
+        // Serial.print("Path: ");Serial.print(path_userID);
+
+  // Salva o arquivo no endereço indicado
+  File f = SPIFFS.open(path_userID, "w");
+  user.prettyPrintTo(f);
+  f.close();
+
+  return true;
+}
 
 bool lockOnHandler(const HomieRange& range, const String& value) {
   if (value != "true" && value != "false") return false;
@@ -152,11 +156,9 @@ void loopHandler() {
   char JSONmessageBuffer[300];
   JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
   Homie.getLogger() << "Leitura da TAG: " << JSONmessageBuffer << endl;
-  Serial.print(uid); Serial.println();
-  rfidNode.setProperty("read").send(uid); // Define o tópico soho/deviceID/lockreader/read como publish
+  rfidNode.setProperty("leitura").send(JSONmessageBuffer);                      // Define o tópico soho/deviceID/lockreader/read como publish
 }
 ////////////////////////////////////////////////////////////////////////////////
-//1533133620        1533130020
 
 void setup() {
     pinMode(D1, INPUT);
@@ -179,7 +181,7 @@ void setup() {
 void loop() {
     Homie.loop();
     if (digitalRead(D1) == HIGH){
-// Rotina para printar os tamanhos dos arquivos salvos na memória do ESP
+      // Rotina para printar os tamanhos dos arquivos salvos na memória do ESP
       Dir dir = SPIFFS.openDir("/U");
       while (dir.next()) {
           Serial.print(dir.fileName());
@@ -187,24 +189,18 @@ void loop() {
           Serial.print(" Tamanho do arquivo: "); Serial.print(f.size());Serial.println();
       }
       File f = SPIFFS.open("/U/98b98827.json", "r");
-// Verifica a existência do arquivo
+      // Verifica a existência do arquivo
       if (f) {
-          size_t size = f.size();
-// Aloca o buffer para determinar o tamanho do arquivo.
-          std::unique_ptr<char[]> buf(new char[size]);
-          f.readBytes(buf.get(), size);
-          DynamicJsonBuffer jsonBuffer0;
-          JsonObject& json = jsonBuffer0.parseObject(buf.get());
-          String demo = json["uid"];
-<<<<<<< HEAD
-          String teste = json["start"];
-          Serial.print(demo);Serial.println();
-          Serial.print(teste);Serial.println();
-=======
-          String lala = json["start"];
-          Serial.print("Parse do Arquivo salvo (UID): ");Serial.print(demo); Serial.println();
-          Serial.print("Parse do Arquivo salvo (START): ");Serial.print(lala); Serial.println();
->>>>>>> 2dfb70c41aae9c84223d48fa24b3b60a7070448a
+        size_t size = f.size();
+        // Aloca o buffer para determinar o tamanho do arquivo.
+        std::unique_ptr<char[]> buf(new char[size]);
+        f.readBytes(buf.get(), size);
+        DynamicJsonBuffer jsonBuffer0;
+        JsonObject& json = jsonBuffer0.parseObject(buf.get());
+        String demo = json["uid"];
+        String teste = json["start"];
+        Serial.print(demo);Serial.println();
+        Serial.print(teste);Serial.println();
+      }
     }
-}
 }

@@ -186,20 +186,18 @@ void loop() {
           Serial.print(" Tamanho do arquivo: "); Serial.print(f.size());Serial.println();
       }
       File f = SPIFFS.open("/U/98b98827.json", "r");
-  // Check if we could find it above function returns true if the file is exist
+// Verifica a existência do arquivo
       if (f) {
-    // Now we need to read contents of the file to parse JSON object contains Username and Access Status
           size_t size = f.size();
-    // Allocate a buffer to store contents of the file.
+// Aloca o buffer para determinar o tamanho do arquivo.
           std::unique_ptr<char[]> buf(new char[size]);
-    // We don't use String here because ArduinoJson library requires the input
-    // buffer to be mutable. If you don't use ArduinoJson, you may as well
-    // use configFile.readString instead.
           f.readBytes(buf.get(), size);
           DynamicJsonBuffer jsonBuffer0;
           JsonObject& json = jsonBuffer0.parseObject(buf.get());
           String demo = json["uid"];
-          Serial.print(demo);
+          String teste = json["start"];
+          Serial.print(demo);Serial.println();
+          Serial.print(teste);Serial.println();
     }
 }
 }

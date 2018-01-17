@@ -99,7 +99,7 @@ void setupRFID(int rfidss, int rfidgain) {
 }
 
 /*--------------------Funções e declarações para o HOMIE----------------------*/
-HomieNode rfidNode("leitura", "Rfid");
+HomieNode rfidNode("auth", "Rfid");
 HomieNode lockNode("fechadura", "Relay");
 HomieNode regNode("cadastro", "File");
 
@@ -115,7 +115,7 @@ bool lockOnHandler(const HomieRange& range, const String& value) {
 }
 
 void setupHandler() {
-  rfidNode.setProperty("leitura").send("c");
+  rfidNode.setProperty("read").send("c");
 }
 
 void loopHandler() {
@@ -152,7 +152,8 @@ void loopHandler() {
   char JSONmessageBuffer[300];
   JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
   Homie.getLogger() << "Leitura da TAG: " << JSONmessageBuffer << endl;
-  rfidNode.setProperty("leitura").send(JSONmessageBuffer); // Define o tópico soho/deviceID/lockreader/read como publish
+  Serial.print(uid); Serial.println();
+  rfidNode.setProperty("read").send(uid); // Define o tópico soho/deviceID/lockreader/read como publish
 }
 ////////////////////////////////////////////////////////////////////////////////
 //1533133620        1533130020
@@ -171,7 +172,7 @@ void setup() {
     Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
     regNode.advertise("novo").settable(regOnHandler);
     lockNode.advertise("open").settable(lockOnHandler);
-    rfidNode.advertise("leitura");
+    rfidNode.advertise("read");
     Homie.setup();
 }
 
@@ -195,9 +196,15 @@ void loop() {
           DynamicJsonBuffer jsonBuffer0;
           JsonObject& json = jsonBuffer0.parseObject(buf.get());
           String demo = json["uid"];
+<<<<<<< HEAD
           String teste = json["start"];
           Serial.print(demo);Serial.println();
           Serial.print(teste);Serial.println();
+=======
+          String lala = json["start"];
+          Serial.print("Parse do Arquivo salvo (UID): ");Serial.print(demo); Serial.println();
+          Serial.print("Parse do Arquivo salvo (START): ");Serial.print(lala); Serial.println();
+>>>>>>> 2dfb70c41aae9c84223d48fa24b3b60a7070448a
     }
 }
 }

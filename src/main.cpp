@@ -14,7 +14,7 @@ const int rfidss = 15;
 const int rfidgain = 112;
 int PIN_RELAY = 4;
 unsigned long cooldown = 0;
-
+String tag;
 // Variáveis NTP
 const char * ntpserver = "br.pool.ntp.org";
 int ntpinter = 30;
@@ -27,52 +27,42 @@ time_t timestamp;
 MFRC522 mfrc522 = MFRC522();
 
 /*------------------------------Rotinas RFID----------------------------------*/
-void ShowReaderDetails() {
-  // // Get the MFRC522 software version
-  // byte v = mfrc522.PCD_ReadRegister(mfrc522.VersionReg);
-  // // Serial.print(F("[ INFO ] MFRC522 Version: 0x"));
-  // // Serial.print(v, HEX);
-  // if (v == 0x91)
-  //   // Serial.print(F(" = v1.0"));
-  // else if (v == 0x92)
-  //   // Serial.print(F(" = v2.0"));
-  // else if (v == 0x88)
-  //   // Serial.print(F(" = clone"));
-  // else
-  //   // Serial.print(F(" (unknown)"));
-  // // Serial.println("");                                                           // When 0x00 or 0xFF is returned, communication probably failed
-  // if ((v == 0x00) || (v == 0xFF)) {
-  //   // Serial.println(F("[ WARN ] Communication failure, check if MFRC522 properly connected"));
-  // }
-}
 void setupRFID(int rfidss, int rfidgain) {
   SPI.begin();                                                                  // Inicializa o protocolo SPI para o MFRC522
   mfrc522.PCD_Init(rfidss, UINT8_MAX);                                          // Inicializa MFRC522 Hardware
   mfrc522.PCD_SetAntennaGain(rfidgain);                                         // Seta o ganho da antena
+
   // Serial.printf("[ INFO ] RFID SS_PIN: %u and Gain Factor: %u", rfidss, rfidgain);
   // Serial.println("");
-  ShowReaderDetails();                                                          // Show details of PCD - MFRC522 Card Reader details
 }
-String leitura_cartao(){
+void rfidloop(){
+  String uid = "";
   //If a new PICC placed to RFID reader continue
-  if ( ! mfrc522.PICC_IsNewCardPresent()) {
-    delay(50);
-    return "";
+  if ( !mfrc522.PICC_IsNewCardPresent()) {
+          delay(10);
+          return;
   }
   //Since a PICC placed get Serial (UID) and continue
-  if ( ! mfrc522.PICC_ReadCardSerial()) {
-    delay(50);
-    return "";
+  if ( !mfrc522.PICC_ReadCardSerial()) {
+          delay(10);
+          return;
   }
   // We got UID tell PICC to stop responding
   mfrc522.PICC_HaltA();
-  cooldown = millis() + 2000;
-  String  uid = "";
-  for (int i = 0; i < mfrc522.uid.size; ++i) {
-    uid += String(mfrc522.uid.uidByte[i], HEX);
-  }
-}
+  cooldown = millis() + 500;
 
+  // There are Mifare PICCs which have 4 byte or 7 byte UID
+  // Get PICC's UID and store on a variable
+  Homie.getLogger() << "[ INFO ] PICC's UID: " << endl;
+  for (int i = 0; i < mfrc522.uid.size; ++i) {
+          uid += String(mfrc522.uid.uidByte[i], HEX);
+  }
+  Serial.print(uid);
+  // Get PICC type
+  MFRC522::PICC_Type piccType = mfrc522.PICC_GetType(mfrc522.uid.sak);
+  String type = mfrc522.PICC_GetTypeName(piccType);
+
+}
 /*--------------------Funções e declarações para o HOMIE----------------------*/
 HomieNode rfidNode("auth", "Rfid");
 HomieNode lockNode("fechadura", "Relay");
@@ -83,70 +73,44 @@ HomieNode regNode("cadastro", "File");
 
 /*----------------------------Modos de operação-------------------------------*/
 void online_mode(time_t timestamp){
-  //If a new PICC placed to RFID reader continue
-  if ( ! mfrc522.PICC_IsNewCardPresent()) {
-    delay(50);
-    return;
-  }
-  //Since a PICC placed get Serial (UID) and continue
-  if ( ! mfrc522.PICC_ReadCardSerial()) {
-    delay(50);
-    return;
-  }
-  // We got UID tell PICC to stop responding
-  mfrc522.PICC_HaltA();
-  cooldown = millis() + 2000;
-  String  uid = "";
-  for (int i = 0; i < mfrc522.uid.size; ++i) {
-    uid += String(mfrc522.uid.uidByte[i], HEX);
+  Homie.getLogger() << "Leitura da Tag - Modo Online" << endl;
+  if (currentMillis >= cooldown) {
+      rfidloop();
   }
   // Prepara o envio do JSON para o Servidor
   DynamicJsonBuffer JSONbuffer;;
   JsonObject& JSONencoder = JSONbuffer.createObject();
-  JSONencoder["tag"] = uid;
+  JSONencoder["tag"] = tag;
   JSONencoder["time"] = NTP.getTimeStr(timestamp);
   char JSONmessageBuffer[300];
   JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
   Homie.getLogger() << "Leitura da TAG: " << JSONmessageBuffer << endl;
-  rfidNode.setProperty("read").send(uid);
+  rfidNode.setProperty("read").send(tag);
 }
 void offline_mode(time_t timestamp){
-  //If a new PICC placed to RFID reader continue
-  if ( ! mfrc522.PICC_IsNewCardPresent()) {
-    delay(50);
-    return;
-  }
-  //Since a PICC placed get Serial (UID) and continue
-  if ( ! mfrc522.PICC_ReadCardSerial()) {
-    delay(50);
-    return;
-  }
-  // We got UID tell PICC to stop responding
-  mfrc522.PICC_HaltA();
-  cooldown = millis() + 2000;
-  String  uid = "";
-  for (int i = 0; i < mfrc522.uid.size; ++i) {
-    uid += String(mfrc522.uid.uidByte[i], HEX);
-  }
   Homie.getLogger() << "Leitura da Tag - Modo Offline" << endl;
-  String off_uid = "/U/";
-  off_uid += uid;
-  off_uid += ".json";
-  if (SPIFFS.exists(off_uid)) {
-    File off = SPIFFS.open(off_uid, "r");
+  if (currentMillis >= cooldown) {
+      rfidloop();
+  }
+
+  String off_tag = "/U/";
+  off_tag += tag;
+  off_tag += ".json";
+  if (SPIFFS.exists(off_tag)) {
+    File off = SPIFFS.open(off_tag, "r");
     size_t size = off.size();
     // Aloca o buffer para determinar o tamanho do arquivo.
     std::unique_ptr<char[]> buf(new char[size]);
     off.readBytes(buf.get(), size);
     DynamicJsonBuffer jsonBuffer0;
     JsonObject& json = jsonBuffer0.parseObject(buf.get());
-    String demo = json["uid"];
+    String demo = json["tag"];
     Serial.print(demo);Serial.println();
-    if(demo == uid){
+    if(demo == tag){
       DynamicJsonBuffer jsonBuffer1;
       JsonObject& mqttlog = jsonBuffer1.createObject();
       time_t timestamp = NTP.getTime();
-      mqttlog["uid"] = uid;
+      mqttlog["tag"] = tag;
       mqttlog["time"] = NTP.getTimeStr(timestamp);
       File log = SPIFFS.open("/log/Mqtt_Disconnected.json", "a");
       mqttlog.prettyPrintTo(log);
@@ -221,15 +185,11 @@ void setupHandler() {
 }
 
 void loopHandler() {
-  String uid;
-  uid = leitura_cartao();
-  if(uid != ""){
-    if(!MQTT_DISC_FLAG) {
-        online_mode(timestamp);                                     // Define o tópico soho/deviceID/lockreader/read como publish
-      }
-      else {
-        offline_mode(timestamp);
+  if(!MQTT_DISC_FLAG) {
+      online_mode(timestamp);                                     // Define o tópico soho/deviceID/lockreader/read como publish
     }
+    else {
+      offline_mode(timestamp);
   }
 }
 ////////////////////////////////////////////////////////////////////////////////

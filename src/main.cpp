@@ -5,6 +5,7 @@
 #include <WiFiUDP.h>
 #include <TimeLib.h>
 #include <FS.h>
+#include "FastLED.h"
 
 // Flags
 bool MQTT_DISC_FLAG = true;
@@ -12,9 +13,13 @@ bool MQTT_DISC_FLAG = true;
 // Variáveis RFID
 const int rfidss = 15;
 const int rfidgain = 112;
-int PIN_RELAY = 4;
-unsigned long cooldown = 0;
-String tag;
+
+String uid;
+
+// Pinos no ESP
+int RELAY_PIN = 4;
+int DOOR_PIN = D0;
+
 // Variáveis NTP
 const char * ntpserver = "br.pool.ntp.org";
 int ntpinter = 30;
@@ -22,9 +27,17 @@ WiFiUDP ntpUDP;
 int16_t timeZone = -3;
 uint32_t currentMillis = 0;
 uint32_t previousMillis = 0;
-time_t timestamp;
+
 // Create MFRC522 RFID instance
 MFRC522 mfrc522 = MFRC522();
+
+int lastDoorState;
+
+// parametros do led
+CRGB led[1];
+int fadeAmount = 5;
+int brightness = 0;
+uint led_ts;
 
 /*------------------------------Rotinas RFID----------------------------------*/
 void setupRFID(int rfidss, int rfidgain) {
@@ -35,86 +48,128 @@ void setupRFID(int rfidss, int rfidgain) {
   // Serial.printf("[ INFO ] RFID SS_PIN: %u and Gain Factor: %u", rfidss, rfidgain);
   // Serial.println("");
 }
-void rfidloop(){
-  String uid = "";
+////////////////////////////////////////////////////////////////////////////////
+
+/*------------------------Implementação da Iluminação-------------------------*/
+void ledPulse(){
+//  led_ts = millis();
+  led[0].setRGB(0,255,255);
+  led[0].fadeLightBy(brightness);
+  FastLED.show();
+  brightness = brightness + fadeAmount;
+  if(brightness == 0 || brightness == 255)
+    fadeAmount = -fadeAmount ;
+//  while (millis() < led_ts+30){}
+}
+/*--------------------Funções e declarações para o HOMIE----------------------*/
+HomieNode accessNode("access", "jSON");                                          // publica todos as tentativas de acesso
+HomieNode offAccessNode("offlineAccess", "jSON");                                // publica todas as tentativas de acesso enquanto offline
+HomieNode unlockNode("unlock", "Relay");                                         // destrava a porta
+HomieNode doorNode("door", "Binary");                                            // publica se a porta está aberta ou fechada
+HomieNode regNode("registry", "jSON");                                           // recebe cadastros de usuários
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool tagReader(){
   //If a new PICC placed to RFID reader continue
   if ( !mfrc522.PICC_IsNewCardPresent()) {
-          delay(10);
-          return;
+          delay(50);
+          return false;
   }
   //Since a PICC placed get Serial (UID) and continue
   if ( !mfrc522.PICC_ReadCardSerial()) {
-          delay(10);
-          return;
+          delay(50);
+          return false;
   }
   // We got UID tell PICC to stop responding
   mfrc522.PICC_HaltA();
-  cooldown = millis() + 500;
 
   // There are Mifare PICCs which have 4 byte or 7 byte UID
   // Get PICC's UID and store on a variable
-  Homie.getLogger() << "[ INFO ] PICC's UID: " << endl;
+  uid = "";
   for (int i = 0; i < mfrc522.uid.size; ++i) {
           uid += String(mfrc522.uid.uidByte[i], HEX);
   }
-  Serial.print(uid);
-  // Get PICC type
-  MFRC522::PICC_Type piccType = mfrc522.PICC_GetType(mfrc522.uid.sak);
-  String type = mfrc522.PICC_GetTypeName(piccType);
-
+  Homie.getLogger()<< uid << endl;
+  return true;
 }
-/*--------------------Funções e declarações para o HOMIE----------------------*/
-HomieNode rfidNode("auth", "Rfid");
-HomieNode lockNode("fechadura", "Relay");
-HomieNode regNode("cadastro", "File");
-////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
+
+void LogCallback(){
+  if (SPIFFS.exists("/access/log.csv")){
+    Homie.getLogger() << "Log de sistema do modo OFFLINE encontrado" << endl;
+    int i, j = 0;
+    String str[]="";
+    File f = SPIFFS.open("/access/log.csv", "r");
+    while(f.position()<f.size()){
+      str[i] = f.readStringUntil('\n');
+      i++;
+    }
+    DynamicJsonBuffer jsonLogBuffer;
+    JsonObject& logsend = jsonLogBuffer.createObject();
+
+    for (j;j==i;j++){
+        String Userlog;
+        Userlog += "log";
+        Userlog += j;
+        logsend[Userlog] = str[j];
+    }
+    char JsonmessageBuffer[512];
+    logsend.printTo(JsonmessageBuffer, sizeof(JsonmessageBuffer));
+    Homie.getLogger() << "Log de acesso: " << JsonmessageBuffer << endl;
+    offAccessNode.setProperty("offlineAccess").send(JsonmessageBuffer);
+    f.close();
+    SPIFFS.remove("/access/log.csv");
+  }
+}
 
 /*----------------------------Modos de operação-------------------------------*/
-void online_mode(time_t timestamp){
-  Homie.getLogger() << "Leitura da Tag - Modo Online" << endl;
-  if (currentMillis >= cooldown) {
-      rfidloop();
+void onlineMode(){
+  if (tagReader()){
+    // Prepara o envio do JSON para o Servidor
+    //DynamicJsonBuffer JSONbuffer;;
+    //JsonObject& JSONencoder = JSONbuffer.createObject();
+    //JSONencoder["tag"] = uid;
+    //JSONencoder["time"] = NTP.getTimeStr(timestamp);
+    //char JSONmessageBuffer[300];
+    //JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
+    Homie.getLogger() << "Leitura da TAG: " << uid << endl;
+    accessNode.setProperty("attempt").send(uid);
   }
-  // Prepara o envio do JSON para o Servidor
-  DynamicJsonBuffer JSONbuffer;;
-  JsonObject& JSONencoder = JSONbuffer.createObject();
-  JSONencoder["tag"] = tag;
-  JSONencoder["time"] = NTP.getTimeStr(timestamp);
-  char JSONmessageBuffer[300];
-  JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
-  Homie.getLogger() << "Leitura da TAG: " << JSONmessageBuffer << endl;
-  rfidNode.setProperty("read").send(tag);
 }
-void offline_mode(time_t timestamp){
-  Homie.getLogger() << "Leitura da Tag - Modo Offline" << endl;
-  if (currentMillis >= cooldown) {
-      rfidloop();
-  }
 
-  String off_tag = "/U/";
-  off_tag += tag;
-  off_tag += ".json";
-  if (SPIFFS.exists(off_tag)) {
-    File off = SPIFFS.open(off_tag, "r");
-    size_t size = off.size();
-    // Aloca o buffer para determinar o tamanho do arquivo.
-    std::unique_ptr<char[]> buf(new char[size]);
-    off.readBytes(buf.get(), size);
-    DynamicJsonBuffer jsonBuffer0;
-    JsonObject& json = jsonBuffer0.parseObject(buf.get());
-    String demo = json["tag"];
-    Serial.print(demo);Serial.println();
-    if(demo == tag){
-      DynamicJsonBuffer jsonBuffer1;
-      JsonObject& mqttlog = jsonBuffer1.createObject();
-      time_t timestamp = NTP.getTime();
-      mqttlog["tag"] = tag;
-      mqttlog["time"] = NTP.getTimeStr(timestamp);
-      File log = SPIFFS.open("/log/Mqtt_Disconnected.json", "a");
-      mqttlog.prettyPrintTo(log);
-      log.close();
+void openLock(){
+  uint ts = millis();
+  digitalWrite(RELAY_PIN, LOW);
+  while (millis() < ts+300){}
+  digitalWrite(RELAY_PIN, HIGH);
+}
+
+void offlineMode(){
+  bool found = false;
+  String str;
+  if (tagReader()){
+    // UID , BEGIN(hh:mm) , END(hh:mm) , days (1,2,3,4,5,6,7) , expiry (dd:mm:yyyy hh:mm)
+    if (SPIFFS.exists("/access/auth.csv")){
+      File f = SPIFFS.open("/access/auth.csv", "r");
+      while (!found){
+        if (f.position()<f.size()){
+          str = f.readStringUntil(',');
+          if (str == uid){
+            //implementar codigo para verificar se está dentro do período de acesso
+            openLock();
+            found = true;
+            Homie.getLogger() << "Acesso offline CONCEDIDO. TAG: " << uid << endl;
+          }
+          else str = f.readStringUntil('\n');
+        }
+      }
+      Homie.getLogger() << "Acesso offline NEGADO. TAG: " << uid << endl;
+      f.close();
+      f = SPIFFS.open("/access/log.csv", "a");
+      f.println(uid+", "+String(millis()));
+      f.close();
     }
   }
 }
@@ -122,7 +177,7 @@ void offline_mode(time_t timestamp){
 
 /*----------------------------HOMIE Handlers----------------------------------*/
 bool regOnHandler(const HomieRange& range, const String& value){
-  if(value=="0") return false;
+  if(value==("0")) return false;
   // Parseia JSON de cadastro vindo do Servidor
   DynamicJsonBuffer jsonBuffer;
   JsonObject& root = jsonBuffer.parseObject(value);
@@ -169,28 +224,45 @@ bool regOnHandler(const HomieRange& range, const String& value){
   return true;
 }
 
-bool lockOnHandler(const HomieRange& range, const String& value) {
-  if (value != "true" && value != "false") return false;
+bool unlockHandler(const HomieRange& range, const String& value) {
+  if (value == "true"){
+    openLock();
+    Homie.getLogger() << "Fechadura desbloqueada" << endl;
+    return true;
+  }
+  // pisca luzinha vermelha
+  return false;
+}
 
-  bool on = (value == "true");
-  digitalWrite(PIN_RELAY, !on ? HIGH : LOW);
-  rfidNode.setProperty("open").send(value);
-  Homie.getLogger() << "Autorização: " << (on ? "true" : "false") << endl;
+bool doorHandler(){
+  if (digitalRead(DOOR_PIN) != lastDoorState)
+  {
+    if (digitalRead(DOOR_PIN))
 
-  return true;
+      doorNode.setProperty("open").send("true");
+    else
+      doorNode.setProperty("open").send("false");
+    lastDoorState = digitalRead(DOOR_PIN);
+  }
 }
 
 void setupHandler() {
-  rfidNode.setProperty("leitura").send("c");
+  doorNode.setProperty("status");
+  setupRFID(rfidss, rfidgain);
+  NTP.begin(ntpserver, timeZone);
+  NTP.setInterval(ntpinter * 60);
+  accessNode.setProperty("leitura");
+  time_t networkTime = NTP.getTime();
+  time_t startTime = millis();
+  time_t systemTime;
+  lastDoorState = digitalRead(DOOR_PIN);
 }
 
 void loopHandler() {
-  if(!MQTT_DISC_FLAG) {
-      online_mode(timestamp);                                     // Define o tópico soho/deviceID/lockreader/read como publish
-    }
-    else {
-      offline_mode(timestamp);
-  }
+  LogCallback();
+  onlineMode();
+  doorHandler();
+//  ledPulse();
 }
 ////////////////////////////////////////////////////////////////////////////////
 /*-----------------------------Homie events-----------------------------------*/
@@ -205,35 +277,38 @@ void onHomieEvent(const HomieEvent& event) {
   }
 }
 void setup() {
-    pinMode(D1, INPUT);
-    Serial.begin(115200);
-    Serial << endl << endl;
-    SPIFFS.begin();
-    pinMode(PIN_RELAY, OUTPUT);
-    digitalWrite(PIN_RELAY, HIGH);
-    Homie_setFirmware("RFID Reader", "0.0.1");
-    setupRFID(rfidss, rfidgain);
-    NTP.begin(ntpserver, timeZone);
-    NTP.setInterval(ntpinter * 60);
-    timestamp = NTP.getTime();
-    Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
-    regNode.advertise("novo").settable(regOnHandler);
-    lockNode.advertise("open").settable(lockOnHandler);
-    rfidNode.advertise("read");
-    Homie.onEvent(onHomieEvent);
-    Homie.setup();
+  // inicializa serial
+  Serial.begin(115200);
+  Serial << endl << endl;
+
+  // inicializa FS
+  SPIFFS.begin();
+
+  // seta pinos
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH);
+
+  // parametros Homie
+  Homie_setFirmware("SOHO MQTT Lock", "0.0.1");
+  Homie_setBrand("SOHO-Lock");
+  Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
+
+  // inicializa os nodes
+  regNode.advertise("new").settable(regOnHandler);
+  unlockNode.advertise("open").settable(unlockHandler);
+  accessNode.advertise("attempt");
+  doorNode.advertise("open");
+  offAccessNode.advertise("file");
+
+  FastLED.addLeds<WS2812B, 3, RGB>(led, 1);
+
+  Homie.onEvent(onHomieEvent);
+  Homie.setup();
 }
 
-void loop() {
-    Homie.loop();
-    if (digitalRead(D1) == HIGH){
-      Serial.print(MQTT_DISC_FLAG);Serial.println();
-      // Rotina para printar os tamanhos dos arquivos salvos na memória do ESP
-      Dir dir = SPIFFS.openDir("/U");
-      while (dir.next()) {
-          Serial.print(dir.fileName());
-          File f = dir.openFile("r");
-          Serial.print(" Tamanho do arquivo: "); Serial.print(f.size());Serial.println();
-      }
-    }
+void loop(){
+  if(MQTT_DISC_FLAG)
+    offlineMode();
+  Homie.loop();
+  ledPulse();
 }

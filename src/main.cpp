@@ -193,7 +193,7 @@ void offlineMode(){
   }
 }
 
-/*----------------------------HOMIE Handlers----------------------------------*/
+/*----------------------------Homie Handlers----------------------------------*/
 bool regOnHandler(const HomieRange& range, const String& value){
   if(value==("0")) return false;
   // Parseia JSON de cadastro vindo do Servidor

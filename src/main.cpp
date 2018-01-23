@@ -25,7 +25,7 @@ const int rfidgain = 112;
 String uid;
 
 // Pinos no ESP
-int RELAY_PIN = 4;
+int RELAY_PIN = 4; // D2
 int DOOR_PIN = D0;
 
 // Variáveis NTP
@@ -226,17 +226,14 @@ bool regOnHandler(const HomieRange& range, const String& value){
   user["days"] = days;
   user["revoke"] = revoke;
         /*-----Debug----*/
-        // Serial.print("UID: ");Serial.print(UID);Serial.println();
-        // Serial.print("start: ");Serial.print(start);Serial.println();
-        // Serial.print("stop: ");Serial.print(stop);Serial.println();
-        // Serial.print("days: ");Serial.print(days);Serial.println();
-        // Serial.print("revoke: ");Serial.print(revoke);Serial.println();
-        // Serial.print("Arquivo: "); Serial.print(f);Serial.println();
-        // Serial.print("Path: ");Serial.print(path_userID);
+        // char bufferprint[512];
+        // user.prettyPrintTo(bufferprint,sizeof(bufferprint));
+        // Homie.getLogger() << "Dados do Usuário: " << bufferprint << endl;
 
   // Salva o arquivo no endereço indicado
   File f = SPIFFS.open(path_userID, "w");
   user.prettyPrintTo(f);
+  Homie.getLogger() << "Usuário Registrado com Sucesso!" << endl;
   f.close();
 
   return true;
@@ -269,7 +266,6 @@ bool doorHandler(){
 
 void setupHandler() {
   doorNode.setProperty("status");
-  setupRFID(rfidss, rfidgain);
   NTP.begin(ntpserver, timeZone);
   NTP.setInterval(ntpinter * 60);
   accessNode.setProperty("leitura");
@@ -280,19 +276,18 @@ void setupHandler() {
 }
 
 void loopHandler() {
-  ledPulse("online");
-  LogCallback();
-  onlineMode();
-  doorHandler();
+    ledPulse("online");
+    LogCallback();
+    onlineMode();
+    doorHandler();
 }
 
 /*-----------------------------Homie events-----------------------------------*/
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
-    // case HomieEventType::WIFI_CONNECTED:
-    // // ledPulse();
-    //
-    // break;
+    case HomieEventType::WIFI_CONNECTED:
+      MQTT_DISC_FLAG = true;
+    break;
     case HomieEventType::MQTT_READY:
       MQTT_DISC_FLAG = false;
     break;
@@ -310,6 +305,9 @@ void setup() {
 
   // inicializa FS
   SPIFFS.begin();
+
+  // inicializa RFID
+  setupRFID(rfidss, rfidgain);
 
   FastLED.addLeds<WS2812B, DATA_PIN, RGB>(led, NUM_LEDS);
   pinMode(DATA_PIN, OUTPUT);
@@ -337,9 +335,9 @@ void setup() {
 }
 
 void loop(){
+  Homie.loop();
   if(MQTT_DISC_FLAG){
     ledPulse("offline");
     offlineMode();
   }
-  Homie.loop();
 }

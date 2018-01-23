@@ -7,15 +7,21 @@
 #include <TimeLib.h>
 #include <FS.h>
 
+// FastLed
 #define NUM_LEDS 1
 #define DATA_PIN 9
+
+CRGB led[NUM_LEDS];
+int fadeAmount = 5;
+int brightness = 0;
+uint led_ts;
+
 // Flags
 bool MQTT_DISC_FLAG = true;
 
 // Variáveis RFID
 const int rfidss = 15;
 const int rfidgain = 112;
-
 String uid;
 
 // Pinos no ESP
@@ -35,33 +41,31 @@ MFRC522 mfrc522 = MFRC522();
 
 int lastDoorState;
 
-// parametros do led
-CRGB led[NUM_LEDS];
-int fadeAmount = 5;
-int brightness = 0;
-uint led_ts;
-
-/*------------------------------Rotinas RFID----------------------------------*/
-void setupRFID(int rfidss, int rfidgain) {
-  SPI.begin();                                                                  // Inicializa o protocolo SPI para o MFRC522
-  mfrc522.PCD_Init(rfidss, UINT8_MAX);                                          // Inicializa MFRC522 Hardware
-  mfrc522.PCD_SetAntennaGain(rfidgain);                                         // Seta o ganho da antena
-
-  // Serial.printf("[ INFO ] RFID SS_PIN: %u and Gain Factor: %u", rfidss, rfidgain);
-  // Serial.println("");
-}
-////////////////////////////////////////////////////////////////////////////////
+/*----------------------------Nodes para o HOMIE------------------------------*/
+HomieNode accessNode("access", "jSON");                                         // publica todos as tentativas de acesso
+HomieNode offAccessNode("offlineAccess", "jSON");                               // publica todas as tentativas de acesso enquanto offline
+HomieNode unlockNode("unlock", "Relay");                                        // destrava a porta
+HomieNode doorNode("door", "Binary");                                           // publica se a porta está aberta ou fechada
+HomieNode regNode("registry", "jSON");                                          // recebe cadastros de usuários
 
 /*------------------------Implementação da Iluminação-------------------------*/
-void ledPulse(){
-//  led_ts = millis();
-  led[0].setRGB(255,255,255);
-  led[0].fadeLightBy(brightness);
-  FastLED.show();
-  brightness = brightness + fadeAmount;
-  if(brightness == 0 || brightness == 255)
-    fadeAmount = -fadeAmount ;
- // while (millis() < led_ts+30){}
+void ledPulse(String state){
+  if (state == "online"){
+    led[0].setRGB(255,255,255);
+    led[0].fadeLightBy(brightness);
+    FastLED.show();
+    brightness = brightness + fadeAmount;
+    if(brightness == 0 || brightness == 255)
+    fadeAmount = -fadeAmount;
+  }
+  if (state == "offline"){
+    led[0].setRGB(0,0,255);
+    led[0].fadeLightBy(brightness);
+    FastLED.show();
+    brightness = brightness + fadeAmount;
+    if(brightness == 0 || brightness == 255)
+    fadeAmount = -fadeAmount;
+  }
 }
 
 void ledBlink(String color){
@@ -78,14 +82,13 @@ void ledBlink(String color){
       while (millis() < led_ts+1000){}
     }
 }
-/*--------------------Funções e declarações para o HOMIE----------------------*/
-HomieNode accessNode("access", "jSON");                                          // publica todos as tentativas de acesso
-HomieNode offAccessNode("offlineAccess", "jSON");                                // publica todas as tentativas de acesso enquanto offline
-HomieNode unlockNode("unlock", "Relay");                                         // destrava a porta
-HomieNode doorNode("door", "Binary");                                            // publica se a porta está aberta ou fechada
-HomieNode regNode("registry", "jSON");                                           // recebe cadastros de usuários
 
-////////////////////////////////////////////////////////////////////////////////
+/*------------------------------Rotinas RFID----------------------------------*/
+void setupRFID(int rfidss, int rfidgain) {
+  SPI.begin();                                                                  // Inicializa o protocolo SPI para o MFRC522
+  mfrc522.PCD_Init(rfidss, UINT8_MAX);                                          // Inicializa MFRC522 Hardware
+  mfrc522.PCD_SetAntennaGain(rfidgain);                                         // Seta o ganho da antena
+}
 
 bool tagReader(){
   //If a new PICC placed to RFID reader continue
@@ -111,7 +114,13 @@ bool tagReader(){
   return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////
+/*-----------------------------Funções do Sistema-----------------------------*/
+void openLock(){
+  uint ts = millis();
+  digitalWrite(RELAY_PIN, LOW);
+  while (millis() < ts+300){}
+  digitalWrite(RELAY_PIN, HIGH);
+}
 
 void LogCallback(){
   if (SPIFFS.exists("/access/log.csv")){
@@ -156,13 +165,6 @@ void onlineMode(){
   }
 }
 
-void openLock(){
-  uint ts = millis();
-  digitalWrite(RELAY_PIN, LOW);
-  while (millis() < ts+300){}
-  digitalWrite(RELAY_PIN, HIGH);
-}
-
 void offlineMode(){
   bool found = false;
   String str;
@@ -190,7 +192,6 @@ void offlineMode(){
     }
   }
 }
-////////////////////////////////////////////////////////////////////////////////
 
 /*----------------------------HOMIE Handlers----------------------------------*/
 bool regOnHandler(const HomieRange& range, const String& value){
@@ -242,17 +243,14 @@ bool regOnHandler(const HomieRange& range, const String& value){
 }
 
 bool unlockHandler(const HomieRange& range, const String& value) {
-  String state;
   if (value == "true"){
-    state = "green";
     openLock();
     Homie.getLogger() << "Fechadura desbloqueada" << endl;
-    ledBlink(state);
+    ledBlink("green");
     return true;
   }
   if(value == "false") {
-    state = "red";
-    ledBlink(state);
+    ledBlink("red");
     return true;
   }
 }
@@ -282,12 +280,12 @@ void setupHandler() {
 }
 
 void loopHandler() {
-  ledPulse();
+  ledPulse("online");
   LogCallback();
   onlineMode();
   doorHandler();
 }
-////////////////////////////////////////////////////////////////////////////////
+
 /*-----------------------------Homie events-----------------------------------*/
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
@@ -303,6 +301,8 @@ void onHomieEvent(const HomieEvent& event) {
     break;
   }
 }
+
+/*---------------------------Inicialização Geral------------------------------*/
 void setup() {
   // inicializa serial
   Serial.begin(115200);
@@ -330,12 +330,16 @@ void setup() {
   doorNode.advertise("open");
   offAccessNode.advertise("file");
 
+  // inicializa o modo Event
   Homie.onEvent(onHomieEvent);
+
   Homie.setup();
 }
 
 void loop(){
-  if(MQTT_DISC_FLAG)
+  if(MQTT_DISC_FLAG){
+    ledPulse("offline");
     offlineMode();
+  }
   Homie.loop();
 }

@@ -1,12 +1,14 @@
 #include <Homie.h>
+#include "FastLED.h"
 #include <ArduinoJson.h>
 #include <NtpClientLib.h>
 #include <MFRC522.h>
 #include <WiFiUDP.h>
 #include <TimeLib.h>
 #include <FS.h>
-#include "FastLED.h"
 
+#define NUM_LEDS 1
+#define DATA_PIN 9
 // Flags
 bool MQTT_DISC_FLAG = true;
 
@@ -34,7 +36,7 @@ MFRC522 mfrc522 = MFRC522();
 int lastDoorState;
 
 // parametros do led
-CRGB led[1];
+CRGB led[NUM_LEDS];
 int fadeAmount = 5;
 int brightness = 0;
 uint led_ts;
@@ -53,13 +55,28 @@ void setupRFID(int rfidss, int rfidgain) {
 /*------------------------Implementação da Iluminação-------------------------*/
 void ledPulse(){
 //  led_ts = millis();
-  led[0].setRGB(0,255,255);
+  led[0].setRGB(255,255,255);
   led[0].fadeLightBy(brightness);
   FastLED.show();
   brightness = brightness + fadeAmount;
   if(brightness == 0 || brightness == 255)
     fadeAmount = -fadeAmount ;
-//  while (millis() < led_ts+30){}
+ // while (millis() < led_ts+30){}
+}
+
+void ledBlink(String color){
+    led_ts = millis();
+    if(color == "green"){
+      // Turn the LED on, then pause
+      led[0].setRGB(255,0,0);
+      FastLED.show();
+      while (millis() < led_ts+1000){}
+    }
+    if(color =="red"){
+      led[0].setRGB(0,255,0);
+      FastLED.show();
+      while (millis() < led_ts+1000){}
+    }
 }
 /*--------------------Funções e declarações para o HOMIE----------------------*/
 HomieNode accessNode("access", "jSON");                                          // publica todos as tentativas de acesso
@@ -225,13 +242,19 @@ bool regOnHandler(const HomieRange& range, const String& value){
 }
 
 bool unlockHandler(const HomieRange& range, const String& value) {
+  String state;
   if (value == "true"){
+    state = "green";
     openLock();
     Homie.getLogger() << "Fechadura desbloqueada" << endl;
+    ledBlink(state);
     return true;
   }
-  // pisca luzinha vermelha
-  return false;
+  if(value == "false") {
+    state = "red";
+    ledBlink(state);
+    return true;
+  }
 }
 
 bool doorHandler(){
@@ -259,15 +282,19 @@ void setupHandler() {
 }
 
 void loopHandler() {
+  ledPulse();
   LogCallback();
   onlineMode();
   doorHandler();
-//  ledPulse();
 }
 ////////////////////////////////////////////////////////////////////////////////
 /*-----------------------------Homie events-----------------------------------*/
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
+    // case HomieEventType::WIFI_CONNECTED:
+    // // ledPulse();
+    //
+    // break;
     case HomieEventType::MQTT_READY:
       MQTT_DISC_FLAG = false;
     break;
@@ -283,6 +310,9 @@ void setup() {
 
   // inicializa FS
   SPIFFS.begin();
+
+  FastLED.addLeds<WS2812B, DATA_PIN, RGB>(led, NUM_LEDS);
+  pinMode(DATA_PIN, OUTPUT);
 
   // seta pinos
   pinMode(RELAY_PIN, OUTPUT);
@@ -300,8 +330,6 @@ void setup() {
   doorNode.advertise("open");
   offAccessNode.advertise("file");
 
-  FastLED.addLeds<WS2812B, 3, RGB>(led, 1);
-
   Homie.onEvent(onHomieEvent);
   Homie.setup();
 }
@@ -310,5 +338,4 @@ void loop(){
   if(MQTT_DISC_FLAG)
     offlineMode();
   Homie.loop();
-  ledPulse();
 }

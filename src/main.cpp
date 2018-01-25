@@ -7,6 +7,15 @@
 #include <TimeLib.h>
 #include <FS.h>
 
+/*-------------------------------------------
+ | Signal        | MFRC522       |  NodeMcu |         PINOUT RFID MFRC522
+ |---------------|:-------------:| :------: |
+ | SPI SDA       | SDA           | D8       |
+ | SPI MOSI      | MOSI          | D7       |
+ | SPI MISO      | MISO          | D6       |
+ | SPI SCK       | SCK           | D5       |
+ -------------------------------------------*/
+
 // FastLed
 #define NUM_LEDS 1
 #define DATA_PIN 9
@@ -18,6 +27,7 @@ uint led_ts;
 
 // Flags
 bool MQTT_DISC_FLAG = true;
+bool findmeFlag = false;
 
 // Variáveis RFID
 const int rfidss = 15;
@@ -41,12 +51,14 @@ MFRC522 mfrc522 = MFRC522();
 
 int lastDoorState;
 
+
 /*----------------------------Nodes para o HOMIE------------------------------*/
 HomieNode accessNode("access", "jSON");                                         // publica todos as tentativas de acesso
 HomieNode offAccessNode("offlineAccess", "jSON");                               // publica todas as tentativas de acesso enquanto offline
 HomieNode unlockNode("unlock", "Relay");                                        // destrava a porta
 HomieNode doorNode("door", "Binary");                                           // publica se a porta está aberta ou fechada
 HomieNode regNode("registry", "jSON");                                          // recebe cadastros de usuários
+HomieNode findNode("find", "Binary");                                           // Identificação da fechadura (sinalização luminosa)
 
 /*------------------------Implementação da Iluminação-------------------------*/
 void ledPulse(String state){
@@ -71,7 +83,6 @@ void ledPulse(String state){
 void ledBlink(String color){
     led_ts = millis();
     if(color == "green"){
-      // Turn the LED on, then pause
       led[0].setRGB(255,0,0);
       FastLED.show();
       while (millis() < led_ts+1000){}
@@ -80,6 +91,17 @@ void ledBlink(String color){
       led[0].setRGB(0,255,0);
       FastLED.show();
       while (millis() < led_ts+1000){}
+    }
+    if(color == "findme"){
+      led[0].setRGB(255,0,0);
+      FastLED.show();
+      while (millis() < led_ts+300){}
+      led[0].setRGB(0,255,0);
+      FastLED.show();
+      while (millis() < led_ts+600){}
+      led[0].setRGB(0,0,255);
+      // FastLED.show();
+      // while (millis() < led_ts+900){}
     }
 }
 
@@ -122,46 +144,62 @@ void openLock(){
   digitalWrite(RELAY_PIN, HIGH);
 }
 
-void LogCallback(){
-  if (SPIFFS.exists("/access/log.csv")){
-    Homie.getLogger() << "Log de sistema do modo OFFLINE encontrado" << endl;
-    int i, j = 0;
-    String str[]="";
-    File f = SPIFFS.open("/access/log.csv", "r");
-    while(f.position()<f.size()){
-      str[i] = f.readStringUntil('\n');
-      i++;
-    }
-    DynamicJsonBuffer jsonLogBuffer;
-    JsonObject& logsend = jsonLogBuffer.createObject();
-
-    for (j;j==i;j++){
-        String Userlog;
-        Userlog += "log";
-        Userlog += j;
-        logsend[Userlog] = str[j];
-    }
-    char JsonmessageBuffer[512];
-    logsend.printTo(JsonmessageBuffer, sizeof(JsonmessageBuffer));
-    Homie.getLogger() << "Log de acesso: " << JsonmessageBuffer << endl;
-    offAccessNode.setProperty("offlineAccess").send(JsonmessageBuffer);
-    f.close();
-    SPIFFS.remove("/access/log.csv");
-  }
-}
+// void LogSend(){
+//   if (SPIFFS.exists("/access/log.csv")){
+//     Homie.getLogger() << "Log de sistema do modo OFFLINE encontrado" << endl;
+//     int i, j = 0;
+//     String str[]="";
+//     File f = SPIFFS.open("/access/log.csv", "r");
+//     while(f.position()<f.size()){
+//       str[i] = f.readStringUntil('\n');
+//       i++;
+//     }
+//     DynamicJsonBuffer jsonLogBuffer;
+//     JsonObject& logsend = jsonLogBuffer.createObject();
+//
+//     for (j;j==i;j++){
+//         String Userlog;
+//         Userlog += "log";
+//         Userlog += j;
+//         logsend[Userlog] = str[j];
+//     }
+//     char JsonmessageBuffer[512];
+//     logsend.printTo(JsonmessageBuffer, sizeof(JsonmessageBuffer));
+//     Homie.getLogger() << "Log de acesso: " << JsonmessageBuffer << endl;
+//     offAccessNode.setProperty("offlineAccess").send(JsonmessageBuffer);
+//     f.close();
+//     SPIFFS.remove("/access/log.csv");
+//   }
+// }
 
 /*----------------------------Modos de operação-------------------------------*/
 void onlineMode(){
   if (tagReader()){
-    // Prepara o envio do JSON para o Servidor
-    //DynamicJsonBuffer JSONbuffer;;
-    //JsonObject& JSONencoder = JSONbuffer.createObject();
-    //JSONencoder["tag"] = uid;
-    //JSONencoder["time"] = NTP.getTimeStr(timestamp);
-    //char JSONmessageBuffer[300];
-    //JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
+      // Prepara o envio do JSON para o Servidor
+      //DynamicJsonBuffer JSONbuffer;;
+      //JsonObject& JSONencoder = JSONbuffer.createObject();
+      //JSONencoder["tag"] = uid;
+      //JSONencoder["time"] = NTP.getTimeStr(timestamp);
+      //char JSONmessageBuffer[300];
+      //JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
     Homie.getLogger() << "Leitura da TAG: " << uid << endl;
     accessNode.setProperty("attempt").send(uid);
+  }
+}
+
+bool stringFinder(String str, File f){
+  bool found = false;
+  while (!found){
+    if (f.position()<f.size()){
+      str = f.readStringUntil(';');
+      if (str == uid){
+        //implementar codigo para verificar se está dentro do período de acesso
+        found = true;
+        Homie.getLogger() << "Encontrado: " << str << endl;
+      }
+      else str = f.readStringUntil('\n');
+    }
+    else found = true;
   }
 }
 
@@ -174,7 +212,7 @@ void offlineMode(){
       File f = SPIFFS.open("/access/auth.csv", "r");
       while (!found){
         if (f.position()<f.size()){
-          str = f.readStringUntil(',');
+          str = f.readStringUntil(';');
           if (str == uid){
             //implementar codigo para verificar se está dentro do período de acesso
             openLock();
@@ -183,61 +221,72 @@ void offlineMode(){
           }
           else str = f.readStringUntil('\n');
         }
+        else found = true;
       }
       Homie.getLogger() << "Acesso offline NEGADO. TAG: " << uid << endl;
       f.close();
       f = SPIFFS.open("/access/log.csv", "a");
-      f.println(uid+", "+String(millis()));
+      f.println(uid+"; "+String(millis()));
       f.close();
     }
   }
 }
 
 /*----------------------------Homie Handlers----------------------------------*/
-bool regOnHandler(const HomieRange& range, const String& value){
-  if(value==("0")) return false;
-  // Parseia JSON de cadastro vindo do Servidor
-  DynamicJsonBuffer jsonBuffer;
-  JsonObject& root = jsonBuffer.parseObject(value);
-  String UID = root["uid"];                                                     // Tag do usuário
-  String start = root["start"];                                                 // Horário inicial
-  String stop = root["stop"];                                                   // Horário final
-  String days = root["days"];                                                   // Dias de recorrência do evento
-  String revoke = root["revoke"];                                               // Data e hora de expiração de acesso.
-        /*-----Debug----*/
-        // Serial.print("Cadastro: "); Serial.print(value); Serial.println();
-        // Serial.print("UID recebido: "); Serial.print(UID); Serial.println();
-        // Serial.print("Start recebido: "); Serial.print(start); Serial.println();
-        // Serial.print("Stop recebido: "); Serial.print(stop); Serial.println();
-        // Serial.print("Days recebido: "); Serial.print(days); Serial.println();
-        // Serial.print("Revoke recebido: "); Serial.print(revoke); Serial.println();
-
-  // Monta o caminho e o arquivo a ser criado
-  String path_userID = "/U/";
-  path_userID += UID;
-  path_userID += ".json";
-
-  // Aloca os valores parseados num buffer para ser serializado dentro do arquivo UID.json
-  DynamicJsonBuffer jsonBuffer1;
-  JsonObject& user = jsonBuffer1.createObject();
-  user["uid"] = UID;
-  user["start"] = start;
-  user["stop"] = stop;
-  user["days"] = days;
-  user["revoke"] = revoke;
-        /*-----Debug----*/
-        // char bufferprint[512];
-        // user.prettyPrintTo(bufferprint,sizeof(bufferprint));
-        // Homie.getLogger() << "Dados do Usuário: " << bufferprint << endl;
-
-  // Salva o arquivo no endereço indicado
-  File f = SPIFFS.open(path_userID, "w");
-  user.prettyPrintTo(f);
-  Homie.getLogger() << "Usuário Registrado com Sucesso!" << endl;
-  f.close();
-
+bool findMeHandler(const HomieRange& range, const String& value){
+  if(value == "true"){
+    findmeFlag = true;
+  }
+  else findmeFlag = false;
   return true;
 }
+
+bool regOnHandler(const HomieRange& range, const String& value){
+  String str;
+  String Copy;
+  if(value==("0")) return false;
+  DynamicJsonBuffer incomejsonBuffer;
+  JsonObject& income = incomejsonBuffer.parseObject(value);
+  String uid_reg = income["uid"];
+  String begin_date = income["begin_date"]; // "mock"
+  String begin_time = income["begin_time"]; // "mock"
+  String end_time = income["end_time"]; // "mock"
+  String recurrence = income["recurrence"]; // "mock"
+  String week_days = income["week_days"]; // "mock"
+  String end_date = income["end_date"]; // "mock"
+  File f = SPIFFS.open("/access/auth.csv", "a+");
+  File temp = SPIFFS.open("/access/temp.csv","w");
+
+  if (!stringFinder(uid_reg, f)){
+    Homie.getLogger() << "Nao encontrou e escreve! -> " << endl;
+    f.println(uid_reg +';'+begin_date+';'+begin_time+';'+end_time+';'+recurrence+';'+week_days+';'+end_date);
+    Homie.getLogger() << "escreveu! -> " << endl;
+    f.close();
+  }
+  else {
+    Homie.getLogger() << "Entra no While! -> " << endl;
+    while (f.position()<f.size()){
+      str = f.readStringUntil(';');
+      Homie.getLogger() << "Encontrado! -> " << str << endl;
+      if (str == uid_reg){
+        f.readStringUntil('\n');
+        Homie.getLogger() << "Lê até a nova linha -> " << endl;
+      }
+      else {
+        Copy = f.readStringUntil('\n');
+        Homie.getLogger() << "String de cópia -> " << Copy << endl;
+        temp.println(Copy);
+      }
+    }
+    temp.println(uid_reg +';'+begin_date+';'+begin_time+';'+end_time+';'+recurrence+';'+week_days+';'+end_date);
+    f.close();
+    temp.close();
+    SPIFFS.remove("/access/auth.csv");
+    SPIFFS.rename("/access/temp.csv","/access/auth.csv");
+  }
+  return true;
+}
+
 
 bool unlockHandler(const HomieRange& range, const String& value) {
   if (value == "true"){
@@ -276,18 +325,23 @@ void setupHandler() {
 }
 
 void loopHandler() {
+  if(findmeFlag){
+    ledBlink("findme");
+  }
+  else {
     ledPulse("online");
-    LogCallback();
+    // LogSend();
     onlineMode();
     doorHandler();
+  }
 }
 
 /*-----------------------------Homie events-----------------------------------*/
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
-    case HomieEventType::WIFI_CONNECTED:
-      MQTT_DISC_FLAG = true;
-    break;
+    // case HomieEventType::WIFI_CONNECTED:
+    //   MQTT_DISC_FLAG = true;
+    // break;
     case HomieEventType::MQTT_READY:
       MQTT_DISC_FLAG = false;
     break;
@@ -322,6 +376,7 @@ void setup() {
   Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
 
   // inicializa os nodes
+  findNode.advertise("me").settable(findMeHandler);
   regNode.advertise("new").settable(regOnHandler);
   unlockNode.advertise("open").settable(unlockHandler);
   accessNode.advertise("attempt");

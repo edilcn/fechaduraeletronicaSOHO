@@ -1,11 +1,11 @@
 #include <Homie.h>
 #include "FastLED.h"
 #include <ArduinoJson.h>
-#include <NtpClientLib.h>
 #include <MFRC522.h>
 #include <WiFiUDP.h>
 #include <TimeLib.h>
 #include <FS.h>
+#include <NTPClient.h>
 
 /*-------------------------------------------
  | Signal        | MFRC522       |  NodeMcu |         PINOUT RFID MFRC522
@@ -28,6 +28,7 @@ uint led_ts;
 // Flags
 bool MQTT_DISC_FLAG = true;
 bool findmeFlag = false;
+bool START_NTP=false;
 
 // Variáveis RFID
 const int rfidss = 15;
@@ -39,12 +40,8 @@ int RELAY_PIN = 4; // D2
 int DOOR_PIN = D0;
 
 // Variáveis NTP
-const char * ntpserver = "br.pool.ntp.org";
-int ntpinter = 30;
 WiFiUDP ntpUDP;
-int16_t timeZone = -3;
-uint32_t currentMillis = 0;
-uint32_t previousMillis = 0;
+NTPClient timeClient(ntpUDP, "br.pool.ntp.org", 0, 3600000);
 
 // Create MFRC522 RFID instance
 MFRC522 mfrc522 = MFRC522();
@@ -54,12 +51,12 @@ int lastDoorState;
 
 /*----------------------------Nodes para o HOMIE------------------------------*/
 HomieNode accessNode("access", "jSON");                                         // publica todos as tentativas de acesso
-HomieNode offAccessNode("offlineAccess", "jSON");                               // publica todas as tentativas de acesso enquanto offline
+HomieNode offAccessNode("offlineaccess", "jSON");                               // publica todas as tentativas de acesso enquanto offline
 HomieNode unlockNode("unlock", "Relay");                                        // destrava a porta
 HomieNode doorNode("door", "Binary");                                           // publica se a porta está aberta ou fechada
 HomieNode regNode("registry", "jSON");                                          // recebe cadastros de usuários
 HomieNode findNode("find", "Binary");                                           // Identificação da fechadura (sinalização luminosa)
-// HomieNode filecheckNode("file", "File");                                        // Leitura dos Arquivos p/ conferencia   // !!!!!!!!!
+HomieNode filecheckNode("file", "File");                                        // Leitura dos Arquivos p/ conferencia   // !!!!!!!!!
 
 /*------------------------Implementação da Iluminação-------------------------*/
 void ledPulse(String state){
@@ -133,35 +130,37 @@ bool tagReader(){
   for (int i = 0; i < mfrc522.uid.size; ++i) {
           uid += String(mfrc522.uid.uidByte[i], HEX);
   }
-  Homie.getLogger()<< uid << endl;
   return true;
 }
 
 /*-----------------------------Funções do Sistema-----------------------------*/
 // Chekar a função                                                              // !!!!!!!!!
-// void fileReader(File f){
-//   String str;
-//   Homie.getLogger() << f.name() << " -> " << f.size() << endl;
-//   while (f.position()<f.size()){
-//     str = f.readStringUntil('\n');
-//     Homie.getLogger() << str << endl;
-//   }
-//   f.close();
-//   Homie.getLogger() << "----------------------------------------------" << endl;
-// }
+void fileReader(File f){
+  String str;
+  Homie.getLogger() << f.name() << " -> " << f.size() << endl;
+  while (f.position()<f.size()){
+    str = f.readStringUntil('\n');
+    Homie.getLogger() << str << endl;
+  }
+  f.close();
+  Homie.getLogger() << "----------------------------------------------" << endl;
+}
 
-bool stringFinder(String str, File f){
-  bool found = false;
-  while (!found){
+bool uidFinder(String uid){
+  File f = SPIFFS.open("/access/auth.csv", "r");
+  while (true){
     if (f.position()<f.size()){
-      str = f.readStringUntil(';');
-      if (str == uid){
-        found = true;
-        Homie.getLogger() << "Encontrado: " << str << endl;
+      if (f.readStringUntil(';') == uid){
+        Homie.getLogger() << " UID Encontrado"  << endl;
+        f.close();
+        return true;
       }
-      else str = f.readStringUntil('\n');
+      else f.readStringUntil('\n');
     }
-    else found = true;
+    else {
+      f.close();
+      return false;
+    }
   }
 }
 
@@ -172,30 +171,24 @@ void openLock(){
   digitalWrite(RELAY_PIN, HIGH);
 }
 // Checkar a Função                                                             // !!!!!!!!!
-// void LogSend(){
-//   int i, j = 0;
-//   if (SPIFFS.exists("/access/log.csv")){
-//     Homie.getLogger() << "Log de sistema do modo OFFLINE encontrado" << endl;
-//     String str;
-//     File f = SPIFFS.open("/access/log.csv", "r");
-//     DynamicJsonBuffer jsonLogBuffer;
-//     JsonObject& logsend = jsonLogBuffer.createObject();
-//     while(f.position()<f.size()){
-//       String Userlog;
-//       Userlog += "log";
-//       Userlog += i;
-//       str = f.readStringUntil('\n');
-//       logsend[Userlog] = str;
-//       i++;
-//     }
-//     String Send;
-//     logsend.printTo(Send);
-//     Homie.getLogger() << "Log de acesso: " << Send << endl;
-//     offAccessNode.setProperty("offlineAccess").send(Send);
-//     f.close();
-//     SPIFFS.remove("/access/log.csv");
-//   }
-// }
+void LogSend(){
+  int i, j = 0;
+  if (SPIFFS.exists("/access/log.csv")){
+    Homie.getLogger() << "Log de sistema do modo OFFLINE encontrado" << endl;
+    String str;
+    File f = SPIFFS.open("/access/log.csv", "r");
+    DynamicJsonBuffer jsonLogBuffer;
+    JsonObject& logsend = jsonLogBuffer.createObject();
+    logsend["data"] = f.readString();
+    // str = "{\"data\": \"" + f.readString() + "\"}";
+    char sendmessage[512];
+    logsend.prettyPrintTo(sendmessage, sizeof(sendmessage));
+    Homie.getLogger() << "Log de acesso: " << sendmessage << endl;
+    offAccessNode.setProperty("json").send(sendmessage);
+    f.close();
+    SPIFFS.remove("/access/log.csv");
+  }
+}
 
 /*----------------------------Modos de operação-------------------------------*/
 void onlineMode(){
@@ -213,31 +206,21 @@ void onlineMode(){
 }
 
 void offlineMode(){
-  bool found = false;
-  String str;
   if (tagReader()){
-    // UID , BEGIN(hh:mm) , END(hh:mm) , days (1,2,3,4,5,6,7) , expiry (dd:mm:yyyy hh:mm)
-    if (SPIFFS.exists("/access/auth.csv")){
-      File f = SPIFFS.open("/access/auth.csv", "r");
-      while (!found){
-        if (f.position()<f.size()){
-          str = f.readStringUntil(';');
-          if (str == uid){
-            //implementar codigo para verificar se está dentro do período de acesso
-            openLock();
-            found = true;
-            Homie.getLogger() << "Acesso offline CONCEDIDO. TAG: " << uid << endl;
-          }
-          else str = f.readStringUntil('\n');
-        }
-        else found = true;
-      }
-      Homie.getLogger() << "Acesso offline NEGADO. TAG: " << uid << endl;
-      f.close();
-      f = SPIFFS.open("/access/log.csv", "a");
-      f.println(uid+"; "+String(millis()));
-      f.close();
+    String NTPtime;
+    File f = SPIFFS.open("/access/log.csv", "a");
+    if(uidFinder(uid)){
+      openLock();
+      ledBlink("green");
     }
+    else
+      ledBlink("red");
+      if(START_NTP)
+        NTPtime = timeClient.getFormattedTime();
+      else
+        NTPtime = millis();
+    f.println(uid+";"+ NTPtime);
+    f.close();
   }
 }
 
@@ -251,8 +234,8 @@ bool findMeHandler(const HomieRange& range, const String& value){
 }
 
 bool regOnHandler(const HomieRange& range, const String& value){
-  String str;
-  String Copy;
+  String str = "";
+  String Copy = "";
   if(value==("0")) return false;
   DynamicJsonBuffer incomejsonBuffer;
   JsonObject& income = incomejsonBuffer.parseObject(value);
@@ -263,27 +246,25 @@ bool regOnHandler(const HomieRange& range, const String& value){
   String recurrence = income["recurrence"]; // "mock"
   String week_days = income["week_days"]; // "mock"
   String end_date = income["end_date"]; // "mock"
-  File f = SPIFFS.open("/access/auth.csv", "a+");
+  File f;
   File temp = SPIFFS.open("/access/temp.csv","w");
 
-  if (!stringFinder(uid_reg, f)){
-    Homie.getLogger() << "Nao encontrou e escreve! -> " << endl;
+  if (!uidFinder(uid_reg)){
+    Homie.getLogger() << "debug" << endl;
+    f = SPIFFS.open("/access/auth.csv", "a+");
     f.println(uid_reg +';'+begin_date+';'+begin_time+';'+end_time+';'+recurrence+';'+week_days+';'+end_date);
-    Homie.getLogger() << "escreveu! -> " << uid_reg +';'+begin_date+';'+begin_time+';'+end_time+';'+recurrence+';'+week_days+';'+end_date << endl;
     f.close();
   }
   else {
-    Homie.getLogger() << "Entra no While! -> " << endl;
+    f = SPIFFS.open("/access/auth.csv", "r");
     while (f.position()<f.size()){
       str = f.readStringUntil(';');
-      Homie.getLogger() << "Encontrado! -> " << str << endl;
       if (str == uid_reg){
         f.readStringUntil('\n');
-        Homie.getLogger() << "Lê até a nova linha -> " << endl;
       }
       else {
+        temp.print(str + ';');
         Copy = f.readStringUntil('\n');
-        Homie.getLogger() << "String de cópia -> " << Copy << endl;
         temp.println(Copy);
       }
     }
@@ -293,6 +274,9 @@ bool regOnHandler(const HomieRange& range, const String& value){
     SPIFFS.remove("/access/auth.csv");
     SPIFFS.rename("/access/temp.csv","/access/auth.csv");
   }
+  f = SPIFFS.open("/access/auth.csv", "r");
+  fileReader(f);
+  f.close();
   return true;
 }
 
@@ -309,15 +293,15 @@ bool unlockHandler(const HomieRange& range, const String& value) {
   }
 }
 // Checkar a função                                                             // !!!!!!!!!
-// bool fileHandler(const HomieRange& range, const String& value){
-//   if(value=="true"){
-//     Dir dir = SPIFFS.openDir("/access");
-//     while (dir.next()) {
-//       File f = dir.openFile("r");
-//       fileReader(f);
-//     }
-//   }
-// }
+bool fileHandler(const HomieRange& range, const String& value){
+  if(value=="true"){
+    Dir dir = SPIFFS.openDir("/access");
+    while (dir.next()) {
+      File f = dir.openFile("r");
+      fileReader(f);
+    }
+  }
+}
 
 bool doorHandler(){
   if (digitalRead(DOOR_PIN) != lastDoorState)
@@ -333,13 +317,9 @@ bool doorHandler(){
 
 void setupHandler() {
   doorNode.setProperty("status");
-  NTP.begin(ntpserver, timeZone);
-  NTP.setInterval(ntpinter * 60);
   accessNode.setProperty("leitura");
-  time_t networkTime = NTP.getTime();
-  time_t startTime = millis();
-  time_t systemTime;
   lastDoorState = digitalRead(DOOR_PIN);
+  // inicializa NtpClient
 }
 
 void loopHandler() {
@@ -348,7 +328,6 @@ void loopHandler() {
   }
   else {
     ledPulse("online");
-    // LogSend();
     onlineMode();
     doorHandler();
   }
@@ -357,8 +336,15 @@ void loopHandler() {
 /*-----------------------------Homie events-----------------------------------*/
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
-    case HomieEventType::MQTT_READY:
+    case HomieEventType::WIFI_CONNECTED:{
+      timeClient.begin();
+      START_NTP = true;
+      }
+      break;
+    case HomieEventType::MQTT_READY:{
       MQTT_DISC_FLAG = false;
+      LogSend();
+    }
     break;
     case HomieEventType::MQTT_DISCONNECTED:
       MQTT_DISC_FLAG = true;
@@ -374,6 +360,7 @@ void setup() {
 
   // inicializa FS
   SPIFFS.begin();
+
 
   // inicializa RFID
   setupRFID(rfidss, rfidgain);
@@ -391,13 +378,13 @@ void setup() {
   Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
 
   // inicializa os nodes
-  // filecheckNode.advertise("read").settable(fileHandler);
+  filecheckNode.advertise("read").settable(fileHandler);
   findNode.advertise("me").settable(findMeHandler);
   regNode.advertise("new").settable(regOnHandler);
   unlockNode.advertise("open").settable(unlockHandler);
   accessNode.advertise("attempt");
   doorNode.advertise("open");
-  offAccessNode.advertise("file");
+  offAccessNode.advertise("json");
 
   // inicializa o modo Event
   Homie.onEvent(onHomieEvent);
@@ -407,8 +394,12 @@ void setup() {
 
 void loop(){
   Homie.loop();
+  if(START_NTP){
+    timeClient.update();
+  }
   if(MQTT_DISC_FLAG){
     ledPulse("offline");
     offlineMode();
   }
+
 }

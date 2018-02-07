@@ -4,6 +4,7 @@
 #include <MFRC522.h>
 #include <WiFiUDP.h>
 #include <TimeLib.h>
+// #include <Time.h>
 #include <FS.h>
 #include <NTPClient.h>
 
@@ -20,15 +21,16 @@
 #define NUM_LEDS 1
 #define DATA_PIN 9
 
-CRGB led[NUM_LEDS];
+uint led_ts;
 int fadeAmount = 5;
 int brightness = 0;
-uint led_ts;
+CRGB led[NUM_LEDS];
 
 // Flags
 bool MQTT_DISC_FLAG = true;
 bool findmeFlag = false;
-bool START_NTP=false;
+bool START_NTP= false;
+
 
 // Variáveis RFID
 const int rfidss = 15;
@@ -104,6 +106,7 @@ void ledBlink(String color){
 }
 
 /*------------------------------Rotinas RFID----------------------------------*/
+
 void setupRFID(int rfidss, int rfidgain) {
   SPI.begin();                                                                  // Inicializa o protocolo SPI para o MFRC522
   mfrc522.PCD_Init(rfidss, UINT8_MAX);                                          // Inicializa MFRC522 Hardware
@@ -134,7 +137,6 @@ bool tagReader(){
 }
 
 /*-----------------------------Funções do Sistema-----------------------------*/
-// Chekar a função                                                              // !!!!!!!!!
 void fileReader(File f){
   String str;
   Homie.getLogger() << f.name() << " -> " << f.size() << endl;
@@ -151,7 +153,7 @@ bool uidFinder(String uid){
   while (true){
     if (f.position()<f.size()){
       if (f.readStringUntil(';') == uid){
-        Homie.getLogger() << " UID Encontrado"  << endl;
+        Homie.getLogger() << uid <<" Encontrado"  << endl;
         f.close();
         return true;
       }
@@ -180,7 +182,6 @@ void LogSend(){
     DynamicJsonBuffer jsonLogBuffer;
     JsonObject& logsend = jsonLogBuffer.createObject();
     logsend["data"] = f.readString();
-    // str = "{\"data\": \"" + f.readString() + "\"}";
     char sendmessage[512];
     logsend.prettyPrintTo(sendmessage, sizeof(sendmessage));
     Homie.getLogger() << "Log de acesso: " << sendmessage << endl;
@@ -213,13 +214,12 @@ void offlineMode(){
       openLock();
       ledBlink("green");
     }
+    else ledBlink("red");
+    if(START_NTP)
+      NTPtime = timeClient.getFormattedTime();
     else
-      ledBlink("red");
-      if(START_NTP)
-        NTPtime = timeClient.getFormattedTime();
-      else
-        NTPtime = millis();
-    f.println(uid+";"+ NTPtime);
+      NTPtime = millis();
+    f.println(uid + ";" + NTPtime);
     f.close();
   }
 }
@@ -319,7 +319,6 @@ void setupHandler() {
   doorNode.setProperty("status");
   accessNode.setProperty("leitura");
   lastDoorState = digitalRead(DOOR_PIN);
-  // inicializa NtpClient
 }
 
 void loopHandler() {

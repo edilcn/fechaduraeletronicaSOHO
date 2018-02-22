@@ -85,7 +85,6 @@ void ledBlink(String color){
     if(color == "green"){
       led[0].setRGB(255,0,0);
       FastLED.show();
-      while (millis() < led_ts+1000){}
     }
     if(color =="red"){
       led[0].setRGB(0,255,0);
@@ -169,6 +168,7 @@ bool uidFinder(String uid){
 void openLock(){
   uint ts = millis();
   digitalWrite(RELAY_PIN, LOW);
+  ledBlink("green");
   while (millis() < ts+300){}
   digitalWrite(RELAY_PIN, HIGH);
 }
@@ -208,11 +208,11 @@ void onlineMode(){
 
 void offlineMode(){
   if (tagReader()){
+    Homie.getLogger() << "Leitura UID: " << uid << endl;
     String NTPtime;
     File f = SPIFFS.open("/access/log.csv", "a");
     if(uidFinder(uid)){
       openLock();
-      ledBlink("green");
     }
     else ledBlink("red");
     if(START_NTP)
@@ -224,7 +224,7 @@ void offlineMode(){
   }
 }
 
-/*----------------------------Homie Handlers----------------------------------*/
+/*----------------------------Homie Callback Handlers----------------------------------*/
 bool findMeHandler(const HomieRange& range, const String& value){
   if(value == "true"){
     findmeFlag = true;

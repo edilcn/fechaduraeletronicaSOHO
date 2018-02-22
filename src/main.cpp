@@ -26,11 +26,12 @@ int fadeAmount = 5;
 int brightness = 0;
 CRGB led[NUM_LEDS];
 
+bool green = false;
+
 // Flags
 bool MQTT_DISC_FLAG = true;
 bool findmeFlag = false;
 bool START_NTP= false;
-
 
 // Variáveis RFID
 const int rfidss = 15;
@@ -49,6 +50,9 @@ NTPClient timeClient(ntpUDP, "br.pool.ntp.org", 0, 3600000);
 MFRC522 mfrc522 = MFRC522();
 
 int lastDoorState;
+
+// contadores para OpenLock
+uint lockTimer = 0;
 
 
 /*----------------------------Nodes para o HOMIE------------------------------*/
@@ -166,12 +170,21 @@ bool uidFinder(String uid){
 }
 
 void openLock(){
-  uint ts = millis();
+  lockTimer = millis();
   digitalWrite(RELAY_PIN, LOW);
   ledBlink("green");
-  while (millis() < ts+300){}
-  digitalWrite(RELAY_PIN, HIGH);
+  green = true;
 }
+
+void closeLock(){
+  if (lockTimer != 0)
+    if (millis() > (lockTimer + 3000)){
+      digitalWrite(RELAY_PIN, HIGH);
+      lockTimer = 0;
+      green = false;
+    }
+}
+
 // Checkar a Função                                                             // !!!!!!!!!
 void LogSend(){
   int i, j = 0;
@@ -326,7 +339,10 @@ void loopHandler() {
     ledBlink("findme");
   }
   else {
-    ledPulse("online");
+    if (green)
+      ledBlink("green");
+    else
+      ledPulse("online");
     onlineMode();
     doorHandler();
   }
@@ -397,8 +413,11 @@ void loop(){
     timeClient.update();
   }
   if(MQTT_DISC_FLAG){
-    ledPulse("offline");
+    if (green)
+      ledBlink("green");
+    else
+      ledPulse("offline");
     offlineMode();
   }
-
+  closeLock();
 }

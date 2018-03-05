@@ -39,7 +39,7 @@ String uid;
 
 // Pinos no ESP
 int RELAY_PIN = 4; // D2
-int DOOR_PIN = D0;
+int DOOR_PIN = 16; // 16
 
 // Variáveis NTP
 WiFiUDP ntpUDP;
@@ -306,19 +306,22 @@ bool fileHandler(const HomieRange& range, const String& value){
 bool doorHandler(){
   if (digitalRead(DOOR_PIN) != lastDoorState)
   {
-    if (digitalRead(DOOR_PIN))
-
-      doorNode.setProperty("open").send("true");
-    else
+    if (digitalRead(DOOR_PIN)){
+      Homie.getLogger() << "Status: Porta Aberta" << endl;
       doorNode.setProperty("open").send("false");
+    }
+
+    else {
+      Homie.getLogger() << "Status: Porta Fechada" << endl;
+      doorNode.setProperty("open").send("true");
+    }
     lastDoorState = digitalRead(DOOR_PIN);
   }
 }
 
 void setupHandler() {
-  doorNode.setProperty("status");
+  doorNode.setProperty("open");
   accessNode.setProperty("leitura");
-  lastDoorState = digitalRead(DOOR_PIN);
 }
 
 void loopHandler() {
@@ -369,7 +372,9 @@ void setup() {
 
   // seta pinos
   pinMode(RELAY_PIN, OUTPUT);
+  pinMode(DOOR_PIN, INPUT);
   digitalWrite(RELAY_PIN, HIGH);
+  lastDoorState = digitalRead(DOOR_PIN);
 
   // parametros Homie
   Homie_setFirmware("SOHO MQTT Lock", "0.0.1");
@@ -400,5 +405,4 @@ void loop(){
     ledPulse("offline");
     offlineMode();
   }
-
 }

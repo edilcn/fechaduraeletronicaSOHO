@@ -18,13 +18,13 @@
  -------------------------------------------*/
 
 // FastLed
-#define NUM_LEDS 1
-#define DATA_PIN 9
-
-uint led_ts;
-int fadeAmount = 5;
-int brightness = 0;
-CRGB led[NUM_LEDS];
+// #define NUM_LEDS 1
+// #define DATA_PIN 9
+//
+// uint led_ts;
+// int fadeAmount = 5;
+// int brightness = 0;
+// CRGB led[NUM_LEDS];
 
 // Flags
 bool MQTT_DISC_FLAG = true;
@@ -61,48 +61,48 @@ HomieNode findNode("find", "Binary");                                           
 HomieNode filecheckNode("file", "File");                                        // Leitura dos Arquivos p/ conferencia   // !!!!!!!!!
 
 /*------------------------Implementação da Iluminação-------------------------*/
-void ledPulse(String state){
-  if (state == "online"){
-    led[0].setRGB(255,255,255);
-    led[0].fadeLightBy(brightness);
-    FastLED.show();
-    brightness = brightness + fadeAmount;
-    if(brightness == 0 || brightness == 255)
-    fadeAmount = -fadeAmount;
-  }
-  if (state == "offline"){
-    led[0].setRGB(0,0,255);
-    led[0].fadeLightBy(brightness);
-    FastLED.show();
-    brightness = brightness + fadeAmount;
-    if(brightness == 0 || brightness == 255)
-    fadeAmount = -fadeAmount;
-  }
-}
-
-void ledBlink(String color){
-    led_ts = millis();
-    if(color == "green"){
-      led[0].setRGB(255,0,0);
-      FastLED.show();
-    }
-    if(color =="red"){
-      led[0].setRGB(0,255,0);
-      FastLED.show();
-      while (millis() < led_ts+1000){}
-    }
-    if(color == "findme"){
-      led[0].setRGB(255,0,0);
-      FastLED.show();
-      while (millis() < led_ts+300){}
-      led[0].setRGB(0,255,0);
-      FastLED.show();
-      while (millis() < led_ts+600){}
-      led[0].setRGB(0,0,255);
-      // FastLED.show();
-      // while (millis() < led_ts+900){}
-    }
-}
+// void ledPulse(String state){
+//   if (state == "online"){
+//     led[0].setRGB(255,255,255);
+//     led[0].fadeLightBy(brightness);
+//     FastLED.show();
+//     brightness = brightness + fadeAmount;
+//     if(brightness == 0 || brightness == 255)
+//     fadeAmount = -fadeAmount;
+//   }
+//   if (state == "offline"){
+//     led[0].setRGB(0,0,255);
+//     led[0].fadeLightBy(brightness);
+//     FastLED.show();
+//     brightness = brightness + fadeAmount;
+//     if(brightness == 0 || brightness == 255)
+//     fadeAmount = -fadeAmount;
+//   }
+// }
+//
+// void ledBlink(String color){
+//     led_ts = millis();
+//     if(color == "green"){
+//       led[0].setRGB(255,0,0);
+//       FastLED.show();
+//     }
+//     if(color =="red"){
+//       led[0].setRGB(0,255,0);
+//       FastLED.show();
+//       while (millis() < led_ts+1000){}
+//     }
+//     if(color == "findme"){
+//       led[0].setRGB(255,0,0);
+//       FastLED.show();
+//       while (millis() < led_ts+300){}
+//       led[0].setRGB(0,255,0);
+//       FastLED.show();
+//       while (millis() < led_ts+600){}
+//       led[0].setRGB(0,0,255);
+//       // FastLED.show();
+//       // while (millis() < led_ts+900){}
+//     }
+// }
 
 /*------------------------------Rotinas RFID----------------------------------*/
 
@@ -168,7 +168,7 @@ bool uidFinder(String uid){
 void openLock(){
   uint ts = millis();
   digitalWrite(RELAY_PIN, LOW);
-  ledBlink("green");
+  // ledBlink("green");
   while (millis() < ts+300){}
   digitalWrite(RELAY_PIN, HIGH);
 }
@@ -214,7 +214,7 @@ void offlineMode(){
     if(uidFinder(uid)){
       openLock();
     }
-    else ledBlink("red");
+    // else ledBlink("red");
     if(START_NTP)
       NTPtime = timeClient.getFormattedTime();
     else
@@ -284,11 +284,11 @@ bool unlockHandler(const HomieRange& range, const String& value) {
   if (value == "true"){
     openLock();
     Homie.getLogger() << "Fechadura desbloqueada" << endl;
-    ledBlink("green");
+    // ledBlink("green");
     return true;
   }
   if(value == "false") {
-    ledBlink("red");
+    // ledBlink("red");
     return true;
   }
 }
@@ -326,10 +326,10 @@ void setupHandler() {
 
 void loopHandler() {
   if(findmeFlag){
-    ledBlink("findme");
+    // ledBlink("findme");
   }
   else {
-    ledPulse("online");
+    // ledPulse("online");
     onlineMode();
     doorHandler();
   }
@@ -367,8 +367,8 @@ void setup() {
   // inicializa RFID
   setupRFID(rfidss, rfidgain);
 
-  FastLED.addLeds<WS2812B, DATA_PIN, RGB>(led, NUM_LEDS);
-  pinMode(DATA_PIN, OUTPUT);
+  // FastLED.addLeds<WS2812B, DATA_PIN, RGB>(led, NUM_LEDS);
+  // pinMode(DATA_PIN, OUTPUT);
 
   // seta pinos
   pinMode(RELAY_PIN, OUTPUT);
@@ -402,7 +402,7 @@ void loop(){
     timeClient.update();
   }
   if(MQTT_DISC_FLAG){
-    ledPulse("offline");
+    // ledPulse("offline");
     offlineMode();
   }
 }

@@ -1,12 +1,11 @@
 #include <Homie.h>
-#include "FastLED.h"
 #include <ArduinoJson.h>
 #include <MFRC522.h>
 #include <WiFiUDP.h>
 #include <TimeLib.h>
-// #include <Time.h>
 #include <FS.h>
 #include <NTPClient.h>
+#include <Adafruit_NeoPixel.h>
 
 /*-------------------------------------------
  | Signal        | MFRC522       |  NodeMcu |         PINOUT RFID MFRC522
@@ -25,6 +24,9 @@
 // int fadeAmount = 5;
 // int brightness = 0;
 // CRGB led[NUM_LEDS];
+
+//NeoPixel
+Adafruit_NeoPixel statusLed = Adafruit_NeoPixel(1, D9, NEO_RGB);
 
 // Flags
 bool MQTT_DISC_FLAG = true;
@@ -50,6 +52,12 @@ MFRC522 mfrc522 = MFRC522();
 
 int lastDoorState;
 
+String ledMode;
+int ledCounter = 80;
+int ledLimit;
+int ledTimer;
+int ledDirection = 1;
+
 
 /*----------------------------Nodes para o HOMIE------------------------------*/
 HomieNode accessNode("access", "jSON");                                         // publica todos as tentativas de acesso
@@ -60,49 +68,29 @@ HomieNode regNode("registry", "jSON");                                          
 HomieNode findNode("find", "Binary");                                           // Identificação da fechadura (sinalização luminosa)
 HomieNode filecheckNode("file", "File");                                        // Leitura dos Arquivos p/ conferencia   // !!!!!!!!!
 
-/*------------------------Implementação da Iluminação-------------------------*/
-// void ledPulse(String state){
-//   if (state == "online"){
-//     led[0].setRGB(255,255,255);
-//     led[0].fadeLightBy(brightness);
-//     FastLED.show();
-//     brightness = brightness + fadeAmount;
-//     if(brightness == 0 || brightness == 255)
-//     fadeAmount = -fadeAmount;
-//   }
-//   if (state == "offline"){
-//     led[0].setRGB(0,0,255);
-//     led[0].fadeLightBy(brightness);
-//     FastLED.show();
-//     brightness = brightness + fadeAmount;
-//     if(brightness == 0 || brightness == 255)
-//     fadeAmount = -fadeAmount;
-//   }
-// }
-//
-// void ledBlink(String color){
-//     led_ts = millis();
-//     if(color == "green"){
-//       led[0].setRGB(255,0,0);
-//       FastLED.show();
-//     }
-//     if(color =="red"){
-//       led[0].setRGB(0,255,0);
-//       FastLED.show();
-//       while (millis() < led_ts+1000){}
-//     }
-//     if(color == "findme"){
-//       led[0].setRGB(255,0,0);
-//       FastLED.show();
-//       while (millis() < led_ts+300){}
-//       led[0].setRGB(0,255,0);
-//       FastLED.show();
-//       while (millis() < led_ts+600){}
-//       led[0].setRGB(0,0,255);
-//       // FastLED.show();
-//       // while (millis() < led_ts+900){}
-//     }
-// }
+void ledController(){
+  if (ledMode == "pulse-white"){
+    if (ledCounter > 253)
+      ledDirection = -2;
+    if (ledCounter < 2)
+      ledDirection = 2;
+    statusLed.setPixelColor(0, statusLed.Color(ledCounter,ledCounter,ledCounter));
+    statusLed.show();
+    Homie.getLogger() << ledCounter << endl;
+    ledCounter += ledDirection;
+  }
+
+  if (ledMode == "pulse-blue"){
+    if (ledCounter > 254)
+      ledDirection = -1;
+    if (ledCounter = 0)
+      ledDirection = 1;
+    statusLed.setPixelColor(0, statusLed.Color(0,0,ledCounter));
+    statusLed.show();
+    ledCounter = ledCounter + ledDirection;
+  }
+
+}
 
 /*------------------------------Rotinas RFID----------------------------------*/
 
@@ -168,7 +156,7 @@ bool uidFinder(String uid){
 void openLock(){
   uint ts = millis();
   digitalWrite(RELAY_PIN, LOW);
-  // ledBlink("green");
+  ledMode = "blink-green";
   while (millis() < ts+300){}
   digitalWrite(RELAY_PIN, HIGH);
 }
@@ -214,7 +202,7 @@ void offlineMode(){
     if(uidFinder(uid)){
       openLock();
     }
-    // else ledBlink("red");
+    ledMode = "blink-red";
     if(START_NTP)
       NTPtime = timeClient.getFormattedTime();
     else
@@ -284,11 +272,11 @@ bool unlockHandler(const HomieRange& range, const String& value) {
   if (value == "true"){
     openLock();
     Homie.getLogger() << "Fechadura desbloqueada" << endl;
-    // ledBlink("green");
+    ledMode = "blink-green";
     return true;
   }
   if(value == "false") {
-    // ledBlink("red");
+    ledMode = "blink-red";
     return true;
   }
 }
@@ -332,6 +320,7 @@ void loopHandler() {
     // ledPulse("online");
     onlineMode();
     doorHandler();
+    ledController();
   }
 }
 
@@ -345,11 +334,15 @@ void onHomieEvent(const HomieEvent& event) {
       break;
     case HomieEventType::MQTT_READY:{
       MQTT_DISC_FLAG = false;
+      ledMode = "pulse-white";
       LogSend();
     }
     break;
-    case HomieEventType::MQTT_DISCONNECTED:
+    case HomieEventType::MQTT_DISCONNECTED:{
       MQTT_DISC_FLAG = true;
+      ledMode = "pulse-blue";
+    }
+
     break;
   }
 }
@@ -363,6 +356,8 @@ void setup() {
   // inicializa FS
   SPIFFS.begin();
 
+  // Inicializa o LED (neopixel)
+  statusLed.begin();
 
   // inicializa RFID
   setupRFID(rfidss, rfidgain);
@@ -398,11 +393,8 @@ void setup() {
 
 void loop(){
   Homie.loop();
-  if(START_NTP){
+  if(START_NTP)
     timeClient.update();
-  }
-  if(MQTT_DISC_FLAG){
-    // ledPulse("offline");
+  if(MQTT_DISC_FLAG)
     offlineMode();
-  }
 }

@@ -6,7 +6,7 @@
 #include <FS.h>
 #include <NTPClient.h>
 #include <Adafruit_NeoPixel.h>
-
+#include <math.h>
 /*-------------------------------------------
  | Signal        | MFRC522       |  NodeMcu |         PINOUT RFID MFRC522
  |---------------|:-------------:| :------: |
@@ -53,10 +53,9 @@ MFRC522 mfrc522 = MFRC522();
 int lastDoorState;
 
 String ledMode;
-int ledCounter = 80;
-int ledLimit;
-int ledTimer;
-int ledDirection = 1;
+float ledCounter = 1;
+int ledClock = 1;
+float ledDirection = 0.2;
 
 
 /*----------------------------Nodes para o HOMIE------------------------------*/
@@ -70,28 +69,72 @@ HomieNode filecheckNode("file", "File");                                        
 
 void ledController(){
   if (ledMode == "pulse-white"){
-    if (ledCounter > 253)
-      ledDirection = -2;
-    if (ledCounter < 2)
-      ledDirection = 2;
-    statusLed.setPixelColor(0, statusLed.Color(ledCounter,ledCounter,ledCounter));
+    if (ledCounter > 5.2 ){
+      ledDirection = -0.2;
+    }
+    else if (ledCounter < -1){
+      ledDirection = 0.2;
+    }
+    statusLed.setPixelColor(0, statusLed.Color((255 - exp(ledCounter)),(255 - exp(ledCounter)),(255 - exp(ledCounter))));
     statusLed.show();
-    Homie.getLogger() << ledCounter << endl;
     ledCounter += ledDirection;
+    if (ledDirection > 0)
+      ledClock++;
+    else
+      ledClock--;
   }
 
   if (ledMode == "pulse-blue"){
-    if (ledCounter > 254)
-      ledDirection = -1;
-    if (ledCounter = 0)
-      ledDirection = 1;
-    statusLed.setPixelColor(0, statusLed.Color(0,0,ledCounter));
+    if (ledCounter > 5.2 ){
+      ledDirection = -0.2;
+    }
+    else if (ledCounter < -1){
+      ledDirection = 0.2;
+    }
+    statusLed.setPixelColor(0, statusLed.Color((255 - exp(ledCounter)),0,0));
     statusLed.show();
-    ledCounter = ledCounter + ledDirection;
+    ledCounter += ledDirection;
+    if (ledDirection > 0)
+      ledClock++;
+    else
+      ledClock--;
   }
 
+  if (ledMode == "blink-green"){
+    if (ledClock < 30){
+      statusLed.setPixelColor(0, statusLed.Color(255,0,0));
+      statusLed.show();
+      ledClock++;
+    }
+    else {
+      if (!MQTT_DISC_FLAG){
+        ledMode = "pulse-white";
+        ledClock = 0;
+      }
+      else{
+        ledMode = "pulse-blue";
+        ledClock = 0;
+      }
+    }
+  }
+  if (ledMode == "blink-red"){
+    if (ledClock < 30){
+      statusLed.setPixelColor(0, statusLed.Color(0,255,0));
+      statusLed.show();
+      ledClock++;
+    }
+    else {
+      if (!MQTT_DISC_FLAG){
+        ledMode = "pulse-white";
+        ledClock = 0;
+      }
+      else{
+        ledMode = "pulse-blue";
+        ledClock = 0;
+      }
+    }
+  }
 }
-
 /*------------------------------Rotinas RFID----------------------------------*/
 
 void setupRFID(int rfidss, int rfidgain) {

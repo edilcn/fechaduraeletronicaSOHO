@@ -4,8 +4,10 @@
 #include <WiFiUDP.h>
 #include <TimeLib.h>
 #include <FS.h>
-#include <NTPClient.h>
 #include <Adafruit_NeoPixel.h>
+#include <ESP8266WiFi.h>
+
+WiFiEventHandler gotIpEventHandler, disconnectedEventHandler;
 
 /*-------------------------------------------
  | Signal        | MFRC522       |  NodeMcu |         PINOUT RFID MFRC522
@@ -16,23 +18,12 @@
  | SPI SCK       | SCK           | D5       |
  -------------------------------------------*/
 
-// FastLed
-// #define NUM_LEDS 1
-// #define DATA_PIN 9
-//
-// uint led_ts;
-// int fadeAmount = 5;
-// int brightness = 0;
-// CRGB led[NUM_LEDS];
-
 //NeoPixel
 Adafruit_NeoPixel statusLed = Adafruit_NeoPixel(1, D9, NEO_RGB);
 
 // Flags
 bool MQTT_DISC_FLAG = true;
 bool findmeFlag = false;
-bool START_NTP= false;
-
 
 // Variáveis RFID
 const int rfidss = 15;
@@ -42,10 +33,6 @@ String uid;
 // Pinos no ESP
 int RELAY_PIN = 4; // D2
 int DOOR_PIN = 16; // 16
-
-// Variáveis NTP
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "br.pool.ntp.org", 0, 3600000);
 
 // Create MFRC522 RFID instance
 MFRC522 mfrc522 = MFRC522();
@@ -57,6 +44,7 @@ int ledCounter = 80;
 int ledLimit;
 int ledTimer;
 int ledDirection = 1;
+int ledUnlock = 0;
 
 
 /*----------------------------Nodes para o HOMIE------------------------------*/
@@ -76,20 +64,28 @@ void ledController(){
       ledDirection = 2;
     statusLed.setPixelColor(0, statusLed.Color(ledCounter,ledCounter,ledCounter));
     statusLed.show();
-    Homie.getLogger() << ledCounter << endl;
     ledCounter += ledDirection;
   }
 
   if (ledMode == "pulse-blue"){
-    if (ledCounter > 254)
-      ledDirection = -1;
-    if (ledCounter = 0)
-      ledDirection = 1;
+    if (ledCounter > 253)
+      ledDirection = -2;
+    if ((ledCounter = 2))
+      ledDirection = 2;
     statusLed.setPixelColor(0, statusLed.Color(0,0,ledCounter));
     statusLed.show();
-    ledCounter = ledCounter + ledDirection;
+    ledCounter += ledDirection;
   }
 
+  if (ledMode == "blink-green"){
+    statusLed.setPixelColor(0,statusLed.Color(254,0,0));
+    statusLed.show();
+  }
+
+  if (ledMode == "blink-red"){
+    statusLed.setPixelColor(0,statusLed.Color(0,254,0));
+    statusLed.show();
+  }
 }
 
 /*------------------------------Rotinas RFID----------------------------------*/
@@ -124,16 +120,6 @@ bool tagReader(){
 }
 
 /*-----------------------------Funções do Sistema-----------------------------*/
-void fileReader(File f){
-  String str;
-  Homie.getLogger() << f.name() << " -> " << f.size() << endl;
-  while (f.position()<f.size()){
-    str = f.readStringUntil('\n');
-    Homie.getLogger() << str << endl;
-  }
-  f.close();
-  Homie.getLogger() << "----------------------------------------------" << endl;
-}
 
 bool uidFinder(String uid){
   File f = SPIFFS.open("/access/auth.csv", "r");
@@ -161,23 +147,7 @@ void openLock(){
   digitalWrite(RELAY_PIN, HIGH);
 }
 // Checkar a Função                                                             // !!!!!!!!!
-void LogSend(){
-  int i, j = 0;
-  if (SPIFFS.exists("/access/log.csv")){
-    Homie.getLogger() << "Log de sistema do modo OFFLINE encontrado" << endl;
-    String str;
-    File f = SPIFFS.open("/access/log.csv", "r");
-    DynamicJsonBuffer jsonLogBuffer;
-    JsonObject& logsend = jsonLogBuffer.createObject();
-    logsend["data"] = f.readString();
-    char sendmessage[512];
-    logsend.prettyPrintTo(sendmessage, sizeof(sendmessage));
-    Homie.getLogger() << "Log de acesso: " << sendmessage << endl;
-    offAccessNode.setProperty("json").send(sendmessage);
-    f.close();
-    SPIFFS.remove("/access/log.csv");
-  }
-}
+
 
 /*----------------------------Modos de operação-------------------------------*/
 void onlineMode(){
@@ -190,24 +160,19 @@ void onlineMode(){
       //char JSONmessageBuffer[300];
       //JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
     Homie.getLogger() << "Leitura da TAG: " << uid << endl;
-    accessNode.setProperty("attempt").send(uid);
+    accessNode.setProperty("attempt").setRetained(false).send(uid);
   }
 }
 
 void offlineMode(){
   if (tagReader()){
     Homie.getLogger() << "Leitura UID: " << uid << endl;
-    String NTPtime;
     File f = SPIFFS.open("/access/log.csv", "a");
     if(uidFinder(uid)){
       openLock();
     }
     ledMode = "blink-red";
-    if(START_NTP)
-      NTPtime = timeClient.getFormattedTime();
-    else
-      NTPtime = millis();
-    f.println(uid + ";" + NTPtime);
+    f.println(uid);
     f.close();
   }
 }
@@ -262,8 +227,6 @@ bool regOnHandler(const HomieRange& range, const String& value){
     SPIFFS.remove("/access/auth.csv");
     SPIFFS.rename("/access/temp.csv","/access/auth.csv");
   }
-  f = SPIFFS.open("/access/auth.csv", "r");
-  fileReader(f);
   f.close();
   return true;
 }
@@ -279,17 +242,19 @@ bool unlockHandler(const HomieRange& range, const String& value) {
     ledMode = "blink-red";
     return true;
   }
+  return true;
 }
 // Checkar a função                                                             // !!!!!!!!!
-bool fileHandler(const HomieRange& range, const String& value){
-  if(value=="true"){
-    Dir dir = SPIFFS.openDir("/access");
-    while (dir.next()) {
-      File f = dir.openFile("r");
-      fileReader(f);
-    }
-  }
-}
+// bool fileHandler(const HomieRange& range, const String& value){
+//   if(value=="true"){
+//     Dir dir = SPIFFS.openDir("/access");
+//     while (dir.next()) {
+//       File f = dir.openFile("r");
+//       fileReader(f);
+//     }
+//   }
+//   return true;
+// }
 
 bool doorHandler(){
   if (digitalRead(DOOR_PIN) != lastDoorState)
@@ -305,42 +270,47 @@ bool doorHandler(){
     }
     lastDoorState = digitalRead(DOOR_PIN);
   }
+  return true;
 }
 
 void setupHandler() {
   doorNode.setProperty("open");
-  accessNode.setProperty("leitura");
 }
 
 void loopHandler() {
   if(findmeFlag){
-    // ledBlink("findme");
   }
   else {
-    // ledPulse("online");
     onlineMode();
     doorHandler();
     ledController();
+
   }
 }
 
 /*-----------------------------Homie events-----------------------------------*/
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
+    case HomieEventType::WIFI_DISCONNECTED:
+      // Do whatever you want when Wi-Fi is disconnected in normal mode
+
+      Serial << "Wi-Fi disconnected, reason: " << (int8_t)event.wifiReason << endl;
+      break;
     case HomieEventType::WIFI_CONNECTED:{
-      timeClient.begin();
-      START_NTP = true;
+      // timeClient.begin();
+      // START_NTP = true;
       }
       break;
     case HomieEventType::MQTT_READY:{
       MQTT_DISC_FLAG = false;
       ledMode = "pulse-white";
-      LogSend();
+      // LogSend();
     }
     break;
     case HomieEventType::MQTT_DISCONNECTED:{
       MQTT_DISC_FLAG = true;
       ledMode = "pulse-blue";
+      Serial << "MQTT disconnected, reason: " << (int8_t)event.mqttReason << endl;
     }
 
     break;
@@ -359,12 +329,11 @@ void setup() {
   // Inicializa o LED (neopixel)
   statusLed.begin();
 
-  // inicializa RFID
-  setupRFID(rfidss, rfidgain);
-
   // FastLED.addLeds<WS2812B, DATA_PIN, RGB>(led, NUM_LEDS);
   // pinMode(DATA_PIN, OUTPUT);
 
+  // inicializa RFID
+  setupRFID(rfidss, rfidgain);
   // seta pinos
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(DOOR_PIN, INPUT);
@@ -377,7 +346,7 @@ void setup() {
   Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
 
   // inicializa os nodes
-  filecheckNode.advertise("read").settable(fileHandler);
+  // filecheckNode.advertise("read").settable(fileHandler);
   findNode.advertise("me").settable(findMeHandler);
   regNode.advertise("new").settable(regOnHandler);
   unlockNode.advertise("open").settable(unlockHandler);
@@ -387,14 +356,15 @@ void setup() {
 
   // inicializa o modo Event
   Homie.onEvent(onHomieEvent);
-
+  Homie.getMqttClient().setKeepAlive(2);
   Homie.setup();
 }
 
 void loop(){
   Homie.loop();
-  if(START_NTP)
-    timeClient.update();
+  if (ledUnlock == 1000){
+
+  }
   if(MQTT_DISC_FLAG)
     offlineMode();
 }

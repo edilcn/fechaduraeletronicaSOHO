@@ -54,7 +54,6 @@ HomieNode unlockNode("unlock", "Relay");                                        
 HomieNode doorNode("door", "Binary");                                           // publica se a porta está aberta ou fechada
 HomieNode regNode("registry", "jSON");                                          // recebe cadastros de usuários
 HomieNode findNode("find", "Binary");                                           // Identificação da fechadura (sinalização luminosa)
-HomieNode filecheckNode("file", "File");                                        // Leitura dos Arquivos p/ conferencia   // !!!!!!!!!
 
 void ledController(){
   if (ledMode == "pulse-white"){
@@ -268,17 +267,6 @@ bool unlockHandler(const HomieRange& range, const String& value) {
   }
   return true;
 }
-// Checkar a função                                                             // !!!!!!!!!
-// bool fileHandler(const HomieRange& range, const String& value){
-//   if(value=="true"){
-//     Dir dir = SPIFFS.openDir("/access");
-//     while (dir.next()) {
-//       File f = dir.openFile("r");
-//       fileReader(f);
-//     }
-//   }
-//   return true;
-// }
 
 bool doorHandler(){
   if (digitalRead(DOOR_PIN) != lastDoorState)
@@ -355,14 +343,11 @@ void onHomieEvent(const HomieEvent& event) {
       Serial << "Wi-Fi disconnected, reason: " << (int8_t)event.wifiReason << endl;
       break;
     case HomieEventType::WIFI_CONNECTED:{
-      // timeClient.begin();
-      // START_NTP = true;
       }
       break;
     case HomieEventType::MQTT_READY:{
       MQTT_DISC_FLAG = false;
       ledMode = "pulse-white";
-      // LogSend();
       }
       break;
     case HomieEventType::MQTT_DISCONNECTED:{
@@ -386,11 +371,9 @@ void setup() {
   // Inicializa o LED (neopixel)
   statusLed.begin();
 
-  // FastLED.addLeds<WS2812B, DATA_PIN, RGB>(led, NUM_LEDS);
-  // pinMode(DATA_PIN, OUTPUT);
-
   // inicializa RFID
   setupRFID(rfidss, rfidgain);
+
   // seta pinos
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(DOOR_PIN, INPUT);
@@ -403,7 +386,6 @@ void setup() {
   Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
 
   // inicializa os nodes
-  // filecheckNode.advertise("read").settable(fileHandler);
   findNode.advertise("me").settable(findMeHandler);
   regNode.advertise("new").settable(regOnHandler);
   unlockNode.advertise("open").settable(unlockHandler);
@@ -419,9 +401,6 @@ void setup() {
 
 void loop(){
   Homie.loop();
-  if (ledUnlock == 1000){
-
-  }
   if(MQTT_DISC_FLAG)
     offlineMode();
 }

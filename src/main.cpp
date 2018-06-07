@@ -315,6 +315,40 @@ void loopHandler() {
 /*-----------------------------Homie events-----------------------------------*/
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
+    case HomieEventType::STANDALONE_MODE:
+      // Do whatever you want when standalone mode is started
+      break;
+    case HomieEventType::CONFIGURATION_MODE:
+      // Do whatever you want when configuration mode is started
+      break;
+    case HomieEventType::NORMAL_MODE:
+      // Do whatever you want when normal mode is started
+      break;
+    case HomieEventType::OTA_STARTED:
+      // Do whatever you want when OTA is started
+      break;
+    case HomieEventType::OTA_PROGRESS:
+      // Do whatever you want when OTA is in progress
+
+      // You can use event.sizeDone and event.sizeTotal
+      break;
+    case HomieEventType::OTA_FAILED:
+      // Do whatever you want when OTA is failed
+      break;
+    case HomieEventType::OTA_SUCCESSFUL:
+      // Do whatever you want when OTA is successful
+      break;
+    case HomieEventType::ABOUT_TO_RESET:
+      // Do whatever you want when the device is about to reset
+      break;
+    case HomieEventType::MQTT_PACKET_ACKNOWLEDGED:
+      // Do whatever you want when an MQTT packet with QoS > 0 is acknowledged by the broker
+
+      // You can use event.packetId
+      break;
+    case HomieEventType::READY_TO_SLEEP:
+      // After you've called `prepareToSleep()`, the event is triggered when MQTT is disconnected
+      break;
     case HomieEventType::WIFI_DISCONNECTED:
       // Do whatever you want when Wi-Fi is disconnected in normal mode
 
@@ -329,15 +363,14 @@ void onHomieEvent(const HomieEvent& event) {
       MQTT_DISC_FLAG = false;
       ledMode = "pulse-white";
       // LogSend();
-    }
-    break;
+      }
+      break;
     case HomieEventType::MQTT_DISCONNECTED:{
       MQTT_DISC_FLAG = true;
       ledMode = "pulse-blue";
       Serial << "MQTT disconnected, reason: " << (int8_t)event.mqttReason << endl;
-    }
-
-    break;
+      }
+      break;
   }
 }
 

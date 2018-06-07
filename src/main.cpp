@@ -68,23 +68,47 @@ void ledController(){
   }
 
   if (ledMode == "pulse-blue"){
-    if (ledCounter > 253)
-      ledDirection = -2;
-    if ((ledCounter = 2))
-      ledDirection = 2;
+    if (ledCounter > 254)
+      ledDirection = -1;
+    if (ledCounter == 0)
+      ledDirection = 1;
     statusLed.setPixelColor(0, statusLed.Color(0,0,ledCounter));
     statusLed.show();
-    ledCounter += ledDirection;
+    ledCounter = ledCounter + ledDirection;
   }
 
   if (ledMode == "blink-green"){
-    statusLed.setPixelColor(0,statusLed.Color(254,0,0));
-    statusLed.show();
+    if (ledCounter < 20){
+      if (ledCounter % 5 == 0)
+        statusLed.setPixelColor(0, statusLed.Color(0,0,0));
+      else
+        statusLed.setPixelColor(0, statusLed.Color(254,0,0));
+      statusLed.show();
+      ledCounter++;
+    }
+    else{
+      if (MQTT_DISC_FLAG == false)
+        ledMode = "pulse-white";
+      else
+        ledMode = "pulse-blue";
+    }
   }
 
   if (ledMode == "blink-red"){
-    statusLed.setPixelColor(0,statusLed.Color(0,254,0));
-    statusLed.show();
+    if (ledCounter < 20){
+      if (ledCounter % 5 == 0)
+        statusLed.setPixelColor(0, statusLed.Color(0,0,0));
+      else
+        statusLed.setPixelColor(0, statusLed.Color(0,254,0));
+      statusLed.show();
+      ledCounter++;
+    }
+    else{
+      if (MQTT_DISC_FLAG == false)
+        ledMode = "pulse-white";
+      else
+        ledMode = "pulse-blue";
+    }
   }
 }
 

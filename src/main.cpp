@@ -4,9 +4,15 @@
 #include <WiFiUDP.h>
 #include <TimeLib.h>
 #include <FS.h>
-#include <NTPClient.h>
 #include <Adafruit_NeoPixel.h>
+<<<<<<< HEAD
 #include <math.h>
+=======
+#include <ESP8266WiFi.h>
+
+WiFiEventHandler gotIpEventHandler, disconnectedEventHandler;
+
+>>>>>>> 3719cea73e34f12ab1d749bd4e9d4e9536d78767
 /*-------------------------------------------
  | Signal        | MFRC522       |  NodeMcu |         PINOUT RFID MFRC522
  |---------------|:-------------:| :------: |
@@ -16,23 +22,12 @@
  | SPI SCK       | SCK           | D5       |
  -------------------------------------------*/
 
-// FastLed
-// #define NUM_LEDS 1
-// #define DATA_PIN 9
-//
-// uint led_ts;
-// int fadeAmount = 5;
-// int brightness = 0;
-// CRGB led[NUM_LEDS];
-
 //NeoPixel
 Adafruit_NeoPixel statusLed = Adafruit_NeoPixel(1, D9, NEO_RGB);
 
 // Flags
 bool MQTT_DISC_FLAG = true;
 bool findmeFlag = false;
-bool START_NTP= false;
-
 
 // Variáveis RFID
 const int rfidss = 15;
@@ -43,19 +38,23 @@ String uid;
 int RELAY_PIN = 4; // D2
 int DOOR_PIN = 16; // 16
 
-// Variáveis NTP
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "br.pool.ntp.org", 0, 3600000);
-
 // Create MFRC522 RFID instance
 MFRC522 mfrc522 = MFRC522();
 
 int lastDoorState;
 
 String ledMode;
+<<<<<<< HEAD
 float ledCounter = 1;
 int ledClock = 1;
 float ledDirection = 0.2;
+=======
+int ledCounter = 80;
+int ledLimit;
+int ledTimer;
+int ledDirection = 1;
+int ledUnlock = 0;
+>>>>>>> 3719cea73e34f12ab1d749bd4e9d4e9536d78767
 
 
 /*----------------------------Nodes para o HOMIE------------------------------*/
@@ -65,7 +64,6 @@ HomieNode unlockNode("unlock", "Relay");                                        
 HomieNode doorNode("door", "Binary");                                           // publica se a porta está aberta ou fechada
 HomieNode regNode("registry", "jSON");                                          // recebe cadastros de usuários
 HomieNode findNode("find", "Binary");                                           // Identificação da fechadura (sinalização luminosa)
-HomieNode filecheckNode("file", "File");                                        // Leitura dos Arquivos p/ conferencia   // !!!!!!!!!
 
 void ledController(){
   if (ledMode == "pulse-white"){
@@ -85,6 +83,7 @@ void ledController(){
   }
 
   if (ledMode == "pulse-blue"){
+<<<<<<< HEAD
     if (ledCounter > 5.2 ){
       ledDirection = -0.2;
     }
@@ -92,6 +91,13 @@ void ledController(){
       ledDirection = 0.2;
     }
     statusLed.setPixelColor(0, statusLed.Color((255 - exp(ledCounter)),0,0));
+=======
+    if (ledCounter > 254)
+      ledDirection = -1;
+    if (ledCounter == 0)
+      ledDirection = 1;
+    statusLed.setPixelColor(0, statusLed.Color(0,0,ledCounter));
+>>>>>>> 3719cea73e34f12ab1d749bd4e9d4e9536d78767
     statusLed.show();
     ledCounter += ledDirection;
     if (ledDirection > 0)
@@ -101,6 +107,7 @@ void ledController(){
   }
 
   if (ledMode == "blink-green"){
+<<<<<<< HEAD
     if (ledClock < 30){
       statusLed.setPixelColor(0, statusLed.Color(255,0,0));
       statusLed.show();
@@ -132,6 +139,38 @@ void ledController(){
         ledMode = "pulse-blue";
         ledClock = 0;
       }
+=======
+    if (ledCounter < 20){
+      if (ledCounter % 5 == 0)
+        statusLed.setPixelColor(0, statusLed.Color(0,0,0));
+      else
+        statusLed.setPixelColor(0, statusLed.Color(254,0,0));
+      statusLed.show();
+      ledCounter++;
+    }
+    else{
+      if (MQTT_DISC_FLAG == false)
+        ledMode = "pulse-white";
+      else
+        ledMode = "pulse-blue";
+    }
+  }
+
+  if (ledMode == "blink-red"){
+    if (ledCounter < 20){
+      if (ledCounter % 5 == 0)
+        statusLed.setPixelColor(0, statusLed.Color(0,0,0));
+      else
+        statusLed.setPixelColor(0, statusLed.Color(0,254,0));
+      statusLed.show();
+      ledCounter++;
+    }
+    else{
+      if (MQTT_DISC_FLAG == false)
+        ledMode = "pulse-white";
+      else
+        ledMode = "pulse-blue";
+>>>>>>> 3719cea73e34f12ab1d749bd4e9d4e9536d78767
     }
   }
 }
@@ -167,16 +206,6 @@ bool tagReader(){
 }
 
 /*-----------------------------Funções do Sistema-----------------------------*/
-void fileReader(File f){
-  String str;
-  Homie.getLogger() << f.name() << " -> " << f.size() << endl;
-  while (f.position()<f.size()){
-    str = f.readStringUntil('\n');
-    Homie.getLogger() << str << endl;
-  }
-  f.close();
-  Homie.getLogger() << "----------------------------------------------" << endl;
-}
 
 bool uidFinder(String uid){
   File f = SPIFFS.open("/access/auth.csv", "r");
@@ -204,23 +233,7 @@ void openLock(){
   digitalWrite(RELAY_PIN, HIGH);
 }
 // Checkar a Função                                                             // !!!!!!!!!
-void LogSend(){
-  int i, j = 0;
-  if (SPIFFS.exists("/access/log.csv")){
-    Homie.getLogger() << "Log de sistema do modo OFFLINE encontrado" << endl;
-    String str;
-    File f = SPIFFS.open("/access/log.csv", "r");
-    DynamicJsonBuffer jsonLogBuffer;
-    JsonObject& logsend = jsonLogBuffer.createObject();
-    logsend["data"] = f.readString();
-    char sendmessage[512];
-    logsend.prettyPrintTo(sendmessage, sizeof(sendmessage));
-    Homie.getLogger() << "Log de acesso: " << sendmessage << endl;
-    offAccessNode.setProperty("json").send(sendmessage);
-    f.close();
-    SPIFFS.remove("/access/log.csv");
-  }
-}
+
 
 /*----------------------------Modos de operação-------------------------------*/
 void onlineMode(){
@@ -233,24 +246,19 @@ void onlineMode(){
       //char JSONmessageBuffer[300];
       //JSONencoder.prettyPrintTo(JSONmessageBuffer, sizeof(JSONmessageBuffer));
     Homie.getLogger() << "Leitura da TAG: " << uid << endl;
-    accessNode.setProperty("attempt").send(uid);
+    accessNode.setProperty("attempt").setRetained(false).send(uid);
   }
 }
 
 void offlineMode(){
   if (tagReader()){
     Homie.getLogger() << "Leitura UID: " << uid << endl;
-    String NTPtime;
     File f = SPIFFS.open("/access/log.csv", "a");
     if(uidFinder(uid)){
       openLock();
     }
     ledMode = "blink-red";
-    if(START_NTP)
-      NTPtime = timeClient.getFormattedTime();
-    else
-      NTPtime = millis();
-    f.println(uid + ";" + NTPtime);
+    f.println(uid);
     f.close();
   }
 }
@@ -305,8 +313,6 @@ bool regOnHandler(const HomieRange& range, const String& value){
     SPIFFS.remove("/access/auth.csv");
     SPIFFS.rename("/access/temp.csv","/access/auth.csv");
   }
-  f = SPIFFS.open("/access/auth.csv", "r");
-  fileReader(f);
   f.close();
   return true;
 }
@@ -322,16 +328,7 @@ bool unlockHandler(const HomieRange& range, const String& value) {
     ledMode = "blink-red";
     return true;
   }
-}
-// Checkar a função                                                             // !!!!!!!!!
-bool fileHandler(const HomieRange& range, const String& value){
-  if(value=="true"){
-    Dir dir = SPIFFS.openDir("/access");
-    while (dir.next()) {
-      File f = dir.openFile("r");
-      fileReader(f);
-    }
-  }
+  return true;
 }
 
 bool doorHandler(){
@@ -348,45 +345,80 @@ bool doorHandler(){
     }
     lastDoorState = digitalRead(DOOR_PIN);
   }
+  return true;
 }
 
 void setupHandler() {
   doorNode.setProperty("open");
-  accessNode.setProperty("leitura");
 }
 
 void loopHandler() {
   if(findmeFlag){
-    // ledBlink("findme");
   }
   else {
-    // ledPulse("online");
     onlineMode();
     doorHandler();
     ledController();
+
   }
 }
 
 /*-----------------------------Homie events-----------------------------------*/
 void onHomieEvent(const HomieEvent& event) {
   switch(event.type) {
+    case HomieEventType::STANDALONE_MODE:
+      // Do whatever you want when standalone mode is started
+      break;
+    case HomieEventType::CONFIGURATION_MODE:
+      // Do whatever you want when configuration mode is started
+      break;
+    case HomieEventType::NORMAL_MODE:
+      // Do whatever you want when normal mode is started
+      break;
+    case HomieEventType::OTA_STARTED:
+      // Do whatever you want when OTA is started
+      break;
+    case HomieEventType::OTA_PROGRESS:
+      // Do whatever you want when OTA is in progress
+
+      // You can use event.sizeDone and event.sizeTotal
+      break;
+    case HomieEventType::OTA_FAILED:
+      // Do whatever you want when OTA is failed
+      break;
+    case HomieEventType::OTA_SUCCESSFUL:
+      // Do whatever you want when OTA is successful
+      break;
+    case HomieEventType::ABOUT_TO_RESET:
+      // Do whatever you want when the device is about to reset
+      break;
+    case HomieEventType::MQTT_PACKET_ACKNOWLEDGED:
+      // Do whatever you want when an MQTT packet with QoS > 0 is acknowledged by the broker
+
+      // You can use event.packetId
+      break;
+    case HomieEventType::READY_TO_SLEEP:
+      // After you've called `prepareToSleep()`, the event is triggered when MQTT is disconnected
+      break;
+    case HomieEventType::WIFI_DISCONNECTED:
+      // Do whatever you want when Wi-Fi is disconnected in normal mode
+
+      Serial << "Wi-Fi disconnected, reason: " << (int8_t)event.wifiReason << endl;
+      break;
     case HomieEventType::WIFI_CONNECTED:{
-      timeClient.begin();
-      START_NTP = true;
       }
       break;
     case HomieEventType::MQTT_READY:{
       MQTT_DISC_FLAG = false;
       ledMode = "pulse-white";
-      LogSend();
-    }
-    break;
+      }
+      break;
     case HomieEventType::MQTT_DISCONNECTED:{
       MQTT_DISC_FLAG = true;
       ledMode = "pulse-blue";
-    }
-
-    break;
+      Serial << "MQTT disconnected, reason: " << (int8_t)event.mqttReason << endl;
+      }
+      break;
   }
 }
 
@@ -405,9 +437,6 @@ void setup() {
   // inicializa RFID
   setupRFID(rfidss, rfidgain);
 
-  // FastLED.addLeds<WS2812B, DATA_PIN, RGB>(led, NUM_LEDS);
-  // pinMode(DATA_PIN, OUTPUT);
-
   // seta pinos
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(DOOR_PIN, INPUT);
@@ -420,7 +449,6 @@ void setup() {
   Homie.setSetupFunction(setupHandler).setLoopFunction(loopHandler);
 
   // inicializa os nodes
-  filecheckNode.advertise("read").settable(fileHandler);
   findNode.advertise("me").settable(findMeHandler);
   regNode.advertise("new").settable(regOnHandler);
   unlockNode.advertise("open").settable(unlockHandler);
@@ -430,14 +458,12 @@ void setup() {
 
   // inicializa o modo Event
   Homie.onEvent(onHomieEvent);
-
+  Homie.getMqttClient().setKeepAlive(2);
   Homie.setup();
 }
 
 void loop(){
   Homie.loop();
-  if(START_NTP)
-    timeClient.update();
   if(MQTT_DISC_FLAG)
     offlineMode();
 }

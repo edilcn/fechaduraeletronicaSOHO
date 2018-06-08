@@ -5,14 +5,10 @@
 #include <TimeLib.h>
 #include <FS.h>
 #include <Adafruit_NeoPixel.h>
-<<<<<<< HEAD
-#include <math.h>
-=======
 #include <ESP8266WiFi.h>
 
 WiFiEventHandler gotIpEventHandler, disconnectedEventHandler;
 
->>>>>>> 3719cea73e34f12ab1d749bd4e9d4e9536d78767
 /*-------------------------------------------
  | Signal        | MFRC522       |  NodeMcu |         PINOUT RFID MFRC522
  |---------------|:-------------:| :------: |
@@ -44,17 +40,11 @@ MFRC522 mfrc522 = MFRC522();
 int lastDoorState;
 
 String ledMode;
-<<<<<<< HEAD
-float ledCounter = 1;
-int ledClock = 1;
-float ledDirection = 0.2;
-=======
 int ledCounter = 80;
 int ledLimit;
 int ledTimer;
 int ledDirection = 1;
 int ledUnlock = 0;
->>>>>>> 3719cea73e34f12ab1d749bd4e9d4e9536d78767
 
 
 /*----------------------------Nodes para o HOMIE------------------------------*/
@@ -67,79 +57,26 @@ HomieNode findNode("find", "Binary");                                           
 
 void ledController(){
   if (ledMode == "pulse-white"){
-    if (ledCounter > 5.2 ){
-      ledDirection = -0.2;
-    }
-    else if (ledCounter < -1){
-      ledDirection = 0.2;
-    }
-    statusLed.setPixelColor(0, statusLed.Color((255 - exp(ledCounter)),(255 - exp(ledCounter)),(255 - exp(ledCounter))));
+    if (ledCounter > 253)
+      ledDirection = -2;
+    if (ledCounter < 2)
+      ledDirection = 2;
+    statusLed.setPixelColor(0, statusLed.Color(ledCounter,ledCounter,ledCounter));
     statusLed.show();
     ledCounter += ledDirection;
-    if (ledDirection > 0)
-      ledClock++;
-    else
-      ledClock--;
   }
 
   if (ledMode == "pulse-blue"){
-<<<<<<< HEAD
-    if (ledCounter > 5.2 ){
-      ledDirection = -0.2;
-    }
-    else if (ledCounter < -1){
-      ledDirection = 0.2;
-    }
-    statusLed.setPixelColor(0, statusLed.Color((255 - exp(ledCounter)),0,0));
-=======
     if (ledCounter > 254)
       ledDirection = -1;
     if (ledCounter == 0)
       ledDirection = 1;
     statusLed.setPixelColor(0, statusLed.Color(0,0,ledCounter));
->>>>>>> 3719cea73e34f12ab1d749bd4e9d4e9536d78767
     statusLed.show();
-    ledCounter += ledDirection;
-    if (ledDirection > 0)
-      ledClock++;
-    else
-      ledClock--;
+    ledCounter = ledCounter + ledDirection;
   }
 
   if (ledMode == "blink-green"){
-<<<<<<< HEAD
-    if (ledClock < 30){
-      statusLed.setPixelColor(0, statusLed.Color(255,0,0));
-      statusLed.show();
-      ledClock++;
-    }
-    else {
-      if (!MQTT_DISC_FLAG){
-        ledMode = "pulse-white";
-        ledClock = 0;
-      }
-      else{
-        ledMode = "pulse-blue";
-        ledClock = 0;
-      }
-    }
-  }
-  if (ledMode == "blink-red"){
-    if (ledClock < 30){
-      statusLed.setPixelColor(0, statusLed.Color(0,255,0));
-      statusLed.show();
-      ledClock++;
-    }
-    else {
-      if (!MQTT_DISC_FLAG){
-        ledMode = "pulse-white";
-        ledClock = 0;
-      }
-      else{
-        ledMode = "pulse-blue";
-        ledClock = 0;
-      }
-=======
     if (ledCounter < 20){
       if (ledCounter % 5 == 0)
         statusLed.setPixelColor(0, statusLed.Color(0,0,0));
@@ -170,10 +107,10 @@ void ledController(){
         ledMode = "pulse-white";
       else
         ledMode = "pulse-blue";
->>>>>>> 3719cea73e34f12ab1d749bd4e9d4e9536d78767
     }
   }
 }
+
 /*------------------------------Rotinas RFID----------------------------------*/
 
 void setupRFID(int rfidss, int rfidgain) {

@@ -256,10 +256,12 @@ bool unlockHandler(const HomieRange& range, const String& value) {
   if (value == "true"){
     openLock();
     Homie.getLogger() << "Fechadura desbloqueada" << endl;
+    ledCounter = 0;
     ledMode = "blink-green";
     return true;
   }
   if(value == "false") {
+    ledCounter = 0;
     ledMode = "blink-red";
     return true;
   }

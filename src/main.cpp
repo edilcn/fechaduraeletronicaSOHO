@@ -72,7 +72,7 @@ void ledController(){
       ledDirection = 1;
     statusLed.setPixelColor(0, statusLed.Color(0,0,ledCounter));
     statusLed.show();
-    ledCounter = ledCounter + ledDirection;
+    ledCounter += ledDirection;
   }
 
   if (ledMode == "blink-green"){
@@ -232,7 +232,7 @@ void onlineMode(){
       OPERATION_MODE = NEXT_OPERATION_MODE;
     }
   }
-  if (OPERATION_MODE == "night"){
+  if (OPERATION_MODE == "night"||"normal"){
     if (tagReader()){
       Homie.getLogger() << "Leitura da TAG: " << uid << endl;
       accessNode.setProperty("attempt").send(uid);

@@ -45,7 +45,7 @@ int ledLimit;
 int ledTimer;
 int ledDirection = 1;
 int ledUnlock = 0;
-
+int unlockLed = 0;
 
 /*----------------------------Nodes para o HOMIE------------------------------*/
 HomieNode accessNode("access", "jSON");                                         // publica todos as tentativas de acesso
@@ -165,12 +165,9 @@ bool uidFinder(String uid){
 void openLock(){
   uint ts = millis();
   digitalWrite(RELAY_PIN, LOW);
-  ledMode = "blink-green";
   while (millis() < ts+300){}
   digitalWrite(RELAY_PIN, HIGH);
 }
-// Checkar a Função                                                             // !!!!!!!!!
-
 
 /*----------------------------Modos de operação-------------------------------*/
 void onlineMode(){
@@ -193,6 +190,7 @@ void offlineMode(){
     File f = SPIFFS.open("/access/log.csv", "a");
     if(uidFinder(uid)){
       openLock();
+      ledMode = "blink-green";
     }
     ledMode = "blink-red";
     f.println(uid);

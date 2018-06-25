@@ -232,7 +232,7 @@ void onlineMode(){
       OPERATION_MODE = NEXT_OPERATION_MODE;
     }
   }
-  if (OPERATION_MODE == "night"||"normal"){
+  if (OPERATION_MODE == "night"||"normal"||"close"){
     if (tagReader()){
       Homie.getLogger() << "Leitura da TAG: " << uid << endl;
       accessNode.setProperty("attempt").send(uid);

@@ -120,26 +120,26 @@ void setupRFID(int rfidss, int rfidgain) {
 }
 
 bool tagReader(){
-  //If a new PICC placed to RFID reader continue
-  if ( !mfrc522.PICC_IsNewCardPresent()) {
-          delay(50);
-          return false;
+  if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+    uint32 int_uid = 0;
+    unsigned char convert[4];
+    uid = "";
+    for (byte i = 4; i > 0; i--){
+      int_uid = (int_uid << 8) + mfrc522.uid.uidByte[i];
+    }
+    Homie.getLogger()<< int_uid << endl;
+    convert[0] = int_uid >> 24;
+    convert[1] = int_uid >> 16;
+    convert[2] = int_uid >> 8;
+    convert[3] = int_uid;
+    uid += (convert[0] <<  24) | (convert[1] << 16) | (convert[2] << 8) | convert[3];
+    mfrc522.PICC_HaltA();
+    return true;
   }
-  //Since a PICC placed get Serial (UID) and continue
-  if ( !mfrc522.PICC_ReadCardSerial()) {
-          delay(50);
-          return false;
+  else{
+    mfrc522.PICC_HaltA();
+    return false;
   }
-  // We got UID tell PICC to stop responding
-  mfrc522.PICC_HaltA();
-
-  // There are Mifare PICCs which have 4 byte or 7 byte UID
-  // Get PICC's UID and store on a variable
-  uid = "";
-  for (int i = 0; i < mfrc522.uid.size; ++i) {
-          uid += String(mfrc522.uid.uidByte[i], HEX);
-  }
-  return true;
 }
 
 /*-----------------------------Funções do Sistema-----------------------------*/

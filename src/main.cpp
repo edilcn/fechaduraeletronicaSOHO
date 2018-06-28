@@ -133,6 +133,7 @@ bool tagReader(){
     convert[2] = int_uid >> 8;
     convert[3] = int_uid;
     uid += (convert[0] <<  24) | (convert[1] << 16) | (convert[2] << 8) | convert[3];
+    Homie.getLogger()<< uid << endl;
     mfrc522.PICC_HaltA();
     return true;
   }

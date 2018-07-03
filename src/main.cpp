@@ -125,7 +125,7 @@ bool tagReader(){
     unsigned char convert[4];
     uid = "";
     for (byte i = 4; i > 0; i--){
-      int_uid = (int_uid << 8) + mfrc522.uid.uidByte[i];
+      int_uid = (int_uid << 8) + mfrc522.uid.uidByte[i-1];
     }
     Homie.getLogger()<< int_uid << endl;
     convert[0] = int_uid >> 24;

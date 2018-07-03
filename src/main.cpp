@@ -66,13 +66,23 @@ void ledController(){
   }
 
   if (ledMode == "pulse-blue"){
-    if (ledCounter > 254)
-      ledDirection = -1;
-    if (ledCounter == 0)
-      ledDirection = 1;
+    if (ledCounter > 253)
+      ledDirection = -2;
+    if (ledCounter < 2)
+      ledDirection = 2;
     statusLed.setPixelColor(0, statusLed.Color(0,0,ledCounter));
     statusLed.show();
     ledCounter += ledDirection;
+  }
+
+  if (ledMode == "white"){
+    statusLed.setPixelColor(0, statusLed.Color(254,254,254));
+    statusLed.show();
+  }
+
+  if (ledMode == "red"){
+    statusLed.setPixelColor(0, statusLed.Color(0,254,0));
+    statusLed.show();
   }
 
   if (ledMode == "blink-green"){
@@ -231,12 +241,22 @@ void onlineMode(){
       digitalWrite(REXT_PIN, HIGH);
       OPERATION_MODE = NEXT_OPERATION_MODE;
     }
+    if (NEXT_OPERATION_MODE == "locked"){
+      digitalWrite(VOLT_PIN, HIGH);
+      digitalWrite(RINT_PIN, HIGH);
+      digitalWrite(REXT_PIN, HIGH);
+      OPERATION_MODE = NEXT_OPERATION_MODE;
+    }
   }
-  if (OPERATION_MODE == "night"||"normal"||"close"){
+
+  if ((OPERATION_MODE == "night") || (OPERATION_MODE == "normal") || (OPERATION_MODE == "close")){
     if (tagReader()){
       Homie.getLogger() << "Leitura da TAG: " << uid << endl;
       accessNode.setProperty("attempt").send(uid);
     }
+  }
+  else if (OPERATION_MODE == "open"){
+
   }
 }
 
@@ -311,24 +331,35 @@ bool operationHandler(const HomieRange& range, const String& value) {
     NEXT_OPERATION_MODE = "normal";
     Homie.getLogger() << "Modo de operação normal" << endl;
     operationModeNode.setProperty("operation").send("normal");
+    ledMode = "pulse-white";
     return true;
   }
   if (value=="night"){
     NEXT_OPERATION_MODE = "night";
     Homie.getLogger() << "Modo de operação noturno" << endl;
     operationModeNode.setProperty("operation").send("night");
+    ledMode = "pulse-white";
     return true;
   }
   if (value=="open"){
     NEXT_OPERATION_MODE = "open";
     Homie.getLogger() << "Modo porta aberta" << endl;
     operationModeNode.setProperty("operation").send("open");
+    ledMode = "white";
     return true;
   }
   if (value=="close"){
     NEXT_OPERATION_MODE = "close";
     Homie.getLogger() << "Modo porta fechada" << endl;
     operationModeNode.setProperty("operation").send("close");
+    ledMode = "pulse-white";
+    return true;
+  }
+  if (value=="locked"){
+    NEXT_OPERATION_MODE = "locked";
+    Homie.getLogger() << "Modo porta trancada" << endl;
+    operationModeNode.setProperty("operation").send("locked");
+    ledMode = "red";
     return true;
   }
   return false;
@@ -421,7 +452,7 @@ void onHomieEvent(const HomieEvent& event) {
       break;
     case HomieEventType::MQTT_READY:{
       MQTT_DISC_FLAG = false;
-      ledMode = "pulse-white";
+      ledMode == "pulse-white";
       LogSend();
     }
     break;

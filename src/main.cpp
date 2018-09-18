@@ -123,12 +123,12 @@ void ledController(){
          ledMode = "pulse-blue";
      }
    }
-   if (ledMode == "blink-blue"){
+   if (ledMode == "blink-yellow"){
      if (ledCounter < 20){
        if (ledCounter % 5 == 0)
          statusLed.setPixelColor(0, statusLed.Color(0,0,0));
        else
-         statusLed.setPixelColor(0, statusLed.Color(0,254,0));
+         statusLed.setPixelColor(0, statusLed.Color(254,254,0));
        statusLed.show();
        ledCounter++;
      }

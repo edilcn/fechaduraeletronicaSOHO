@@ -18,15 +18,15 @@
 // #define DEVICE_CREDENTIAL "gAiu$u1wGJ9D"
 
 #define USERNAME "SHLabs"
-#define DEVICE_ID "lockcw1"         
-#define DEVICE_CREDENTIAL "9&12ipS&Ab26"
+#define DEVICE_ID "lock205"         
+#define DEVICE_CREDENTIAL "08B8p0r9v1$w"
 
 // Informações do WiFi
 #define SSID_STA "soholabs"
 #define SSID_PASSWORD "s0h0l@b5"
 
 // Pinos no ESP
-#define VOLT_PIN  D1 // D0 16 (5v)
+#define VOLT_PIN  D2 // D0 16 (5v)
 
 // Thinger.IO
 ThingerESP8266 thing(USERNAME, DEVICE_ID, DEVICE_CREDENTIAL);

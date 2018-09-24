@@ -11,7 +11,6 @@
 #include <NtpClientLib.h>
 #include <TimeLib.h>
 
-
 // Credenciais do Thinger.IO
 // #define USERNAME "paumito"
 // #define DEVICE_ID "teste"
@@ -56,7 +55,6 @@ int ledTimer;
 int ledDirection = 1;
 
 uint doorTimer = 0;
-
 
 /*------------------------------Rotinas LED----------------------------------*/
 void ledController(){
@@ -161,6 +159,7 @@ void processSyncEvent (NTPSyncEvent_t ntpEvent) {
 
 boolean syncEventTriggered = false; // True if a time even has been triggered
 NTPSyncEvent_t ntpEvent; // Last triggered event
+
 /*------------------------------Rotinas RFID----------------------------------*/
 
 void setupRFID(int rfidss, int rfidgain) {
@@ -187,6 +186,7 @@ bool tagReader(){
 }
 
 /*----------------------------Modos de operação-------------------------------*/
+
 void onlineMode(){
   if (tagReader())
     thing.stream(thing["tag"]);
@@ -205,9 +205,27 @@ void closeDoor(){
    }
 }
 
+/*----------------------- Notificação (Ticker) ------------------------------*/
+
+void notification(){
+  uint32_t uptime = 0;
+  String version = "";
+  size_t freeheap = 0;
+  uint32_t freesketchspace = 0;
+
+  uptime = ESP.getCycleCount();
+  version = ESP.getSketchMD5();
+  freeheap = ESP.getFreeHeap();
+  freesketchspace = ESP.getFreeSketchSpace();
+}
+
+
 void setup() {
  Serial.begin(115200);
  statusLed.begin();
+
+ pinMode(LED_BUILTIN, OUTPUT);
+ digitalWrite(LED_BUILTIN, LOW);
 
  NTP.begin ("a.st1.ntp.br", timeZone, false, minutesTimeZone);
  NTP.setInterval (3600);
@@ -235,6 +253,8 @@ void setup() {
 
  thing.add_wifi(SSID_STA, SSID_PASSWORD);
 
+
+// THING UNLOCK
  thing["unlock"] << [](pson& in){
    int number = in;
    if (number == 0){
@@ -252,6 +272,8 @@ void setup() {
    }
  };
 
+
+// THING TAG
  thing["tag"] >> [](pson& out){
    out = uid;
  };

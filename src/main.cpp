@@ -489,9 +489,10 @@ void setup() {
     }
   };
 
-  thing["botao"] << [](pson& in){
+  thing["botao"] = [](pson& in, pson& out){
     if(in.is_empty()){
         in = (bool) digitalRead(VOLT_PIN);
+        out = (bool) digitalRead(VOLT_PIN);
     }
     else{
         digitalWrite(VOLT_PIN, in ? HIGH : LOW);

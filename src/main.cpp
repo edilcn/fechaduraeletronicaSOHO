@@ -45,6 +45,11 @@ const int rfidss = 15;
 const int rfidgain = 112;
 String uid;
 
+// Log Strings
+String Log;
+
+uint timercount;
+
 // Create MFRC522 RFID instance
 MFRC522 mfrc522 = MFRC522();
 
@@ -208,6 +213,7 @@ void closeDoor(){
 /*----------------------- Notificação (Ticker) ------------------------------*/
 
 void notification(){
+  Log = "";
   uint32_t uptime = 0;
   String version = "";
   size_t freeheap = 0;
@@ -217,13 +223,27 @@ void notification(){
   version = ESP.getSketchMD5();
   freeheap = ESP.getFreeHeap();
   freesketchspace = ESP.getFreeSketchSpace();
+  Log += "Uptime = ";
+  Log += uptime;
+  Log += ";";
+  Log += "Version = ";
+  Log += version;
+  Log += ";";
+  Log += "Free Heap = ";
+  Log += freeheap;
+  Log += ";";
+  Log += "Free Sketch Space = ";
+  Log += freesketchspace;
 }
 
 
 void setup() {
  Serial.begin(115200);
  statusLed.begin();
+ 
+ timercount = millis() + 60000;
 
+ 
  pinMode(LED_BUILTIN, OUTPUT);
  digitalWrite(LED_BUILTIN, LOW);
 
@@ -277,6 +297,12 @@ void setup() {
  thing["tag"] >> [](pson& out){
    out = uid;
  };
+
+ // THING DEBUG
+
+thing["notification"] >> [](pson& out){
+  out = Log;
+};
 
  // NTP EVENTS
  NTP.onNTPSyncEvent ([](NTPSyncEvent_t event) {
@@ -341,11 +367,16 @@ void loop() {
  closeDoor();
  if ((WiFi.status() == WL_CONNECTED) && !(WiFi.localIP() == INADDR_NONE)){
    Status = true;
+   if (millis() > timercount) {
+     notification();
+     timercount = millis() + 60000;
+   }
  }
  else Status = false;
  if (syncEventTriggered) {
        processSyncEvent (ntpEvent);
        syncEventTriggered = false;
+       Log = "Wifi Desconectou";
  }
  if (uid != ""){
    pson data;

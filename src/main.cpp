@@ -242,7 +242,6 @@ void setup() {
  statusLed.begin();
  
  timercount = millis() + 60000;
-
  
  pinMode(LED_BUILTIN, OUTPUT);
  digitalWrite(LED_BUILTIN, LOW);
@@ -357,6 +356,8 @@ thing["notification"] >> [](pson& out){
  });
  // init arduino OTA
  ArduinoOTA.begin();
+
+ Log = "First Setup";
 }
 
 void loop() {

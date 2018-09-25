@@ -453,9 +453,10 @@ void setup() {
 
   thing.add_wifi(SSID_STA, SSID_PASSWORD);
 
-  thing["mode"] << [](pson& in){
+  thing["mode"] = [](pson& in, pson& out){
       if(in.is_empty()){
         in = (int) value;
+        out = (int) value;
       }
       else {
         value = in;

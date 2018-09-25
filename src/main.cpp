@@ -47,6 +47,7 @@ String uid;
 
 // Log Strings
 String Log;
+uint32_t minutes;
 
 uint timercount;
 
@@ -214,26 +215,28 @@ void closeDoor(){
 
 void notification(){
   Log = "";
-  uint32_t uptime = 0;
-  String version = "";
-  size_t freeheap = 0;
-  uint32_t freesketchspace = 0;
+  Log += "Time: ";
+  Log += 5*(minutes++);
+  // uint32_t uptime = 0;
+  // String version = "";
+  // size_t freeheap = 0;
+  // uint32_t freesketchspace = 0;
 
-  uptime = ESP.getCycleCount();
-  version = ESP.getSketchMD5();
-  freeheap = ESP.getFreeHeap();
-  freesketchspace = ESP.getFreeSketchSpace();
-  Log += "Uptime = ";
-  Log += uptime;
-  Log += ";";
-  Log += "Version = ";
-  Log += version;
-  Log += ";";
-  Log += "Free Heap = ";
-  Log += freeheap;
-  Log += ";";
-  Log += "Free Sketch Space = ";
-  Log += freesketchspace;
+  // uptime = ESP.getCycleCount();
+  // version = ESP.getSketchMD5();
+  // freeheap = ESP.getFreeHeap();
+  // freesketchspace = ESP.getFreeSketchSpace();
+  // Log += "Uptime = ";
+  // Log += uptime;
+  // Log += ";";
+  // Log += "Version = ";
+  // Log += version;
+  // Log += ";";
+  // Log += "Free Heap = ";
+  // Log += freeheap;
+  // Log += ";";
+  // Log += "Free Sketch Space = ";
+  // Log += freesketchspace;
 }
 
 
@@ -241,7 +244,7 @@ void setup() {
  Serial.begin(115200);
  statusLed.begin();
  
- timercount = millis() + 60000;
+ timercount = millis() + 300000;
  
  pinMode(LED_BUILTIN, OUTPUT);
  digitalWrite(LED_BUILTIN, LOW);
@@ -370,7 +373,7 @@ void loop() {
    Status = true;
    if (millis() > timercount) {
      notification();
-     timercount = millis() + 60000;
+     timercount = millis() + 300000;
    }
  }
  else Status = false;
